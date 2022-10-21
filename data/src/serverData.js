@@ -70,13 +70,13 @@ class ServerData {
         this._maxRamPercentage = value
     }
 
-    /** @returns {number | undefined} */
-    get threadsAvailable() {
-        return this._threadsAvailable
+    /** @returns {boolean | undefined} */
+    get scriptingAvailable() {
+        return this._scriptingAvailable
     }
 
-    set threadsAvailable(value) {
-        this._threadsAvailable = value
+    set scriptingAvailable(value) {
+        this._scriptingAvailable = value
     }
 
     serialize() {
@@ -178,7 +178,7 @@ const savedProperties = [
     "reqHackLevel",
     "ttl",
     "maxRamPercentage",
-    "threadsAvailable",
+    "scriptingAvailable",
     "parent",
 ]
 const db = "db.txt"

@@ -19,13 +19,13 @@ export async function main(ns) {
 
     do {
         ns.clearLog()
-        lfn(`Current iteration: ${new Date().toISOString()}`)
+        lfn(`Current iteration: ${new Date().toTimeString()}`)
         const index = loadServerData(ns, lfn)
 
         if (!index.size) {
             const home = new ServerData("home")
             home.ttl = 0
-            home.maxRamPercentage = 0.9
+            home.maxRamPercentage = 0.95
             home.note = "home"
             index.set(home.serverName, home)
         }
@@ -35,8 +35,6 @@ export async function main(ns) {
         for (const server of knownServers) {
             await exploreHost(ns, index, server, exploreParams, lfn)
         }
-
-        printStats(ns, index, lfn)
 
         saveServerData(ns, index, lfn)
         lfn("Iteration done")
@@ -78,14 +76,14 @@ async function exploreHost(ns, index, hostData, exploreParams, lfn) {
     }
     // we don't have access
     if (!hostData.hasAdmin) {
-        hostData.threadsAvailable = null // we need to clean up after augumentation
+        hostData.scriptingAvailable = false // we need to clean up after augumentation
         return
     }
 
     const maxRamAvailable = ns.getServerMaxRam(server) * (hostData.maxRamPercentage ?? 1)
-    hostData.threadsAvailable = Math.floor(maxRamAvailable / moneyScriptRam)
+    hostData.scriptingAvailable = Math.floor(maxRamAvailable / moneyScriptRam) > 0
 
-    if (!hostData.threadsAvailable) {
+    if (!hostData.scriptingAvailable) {
         hostData.note = `Not enough ram - req: ${moneyScriptRam}, has ${maxRamAvailable}`
         return
     }
@@ -140,50 +138,6 @@ function open(ns, target) {
     return ns.hasRootAccess(target)
 }
 
-/**
- * @param {NS} ns
- * @param {Map<string, ServerData>} index
- * @param {(...args: any[]) => void} lfn
- * @returns {void}
- */
-function printStats(ns, index, lfn) {
-
-    let serversHacked = 0
-    let serversScriptsRunning = 0
-    let serversScriptsExcluded = 0
-
-    let totalMoney = 0
-    let totalMaxMoney = 0
-
-    let hackedMoney = 0
-    let hackedMaxMoney = 0
-    for (const [sname, server] of index) {
-        const money = ns.getServerMoneyAvailable(sname)
-        const maxMoney = ns.getServerMaxMoney(sname)
-
-        totalMoney += money
-        totalMaxMoney += maxMoney
-
-        if (server.hasAdmin) {
-            serversHacked++
-
-            hackedMoney += money
-            hackedMaxMoney += maxMoney
-        }
-
-        if (server.threadsAvailable > 0) {
-            serversScriptsRunning++
-        }
-    }
-
-    lfn(`Stats:`)
-    lfn(`Servers hacked: ${serversHacked}, known: ${index.size}`)
-    lfn(`Servers running: ${serversScriptsRunning}, excluded: ${serversScriptsExcluded}`)
-    lfn(`Hacked available money: ${formatMoney(hackedMoney)}, max: ${formatMoney(hackedMaxMoney)}`)
-    lfn(`All    available money: ${formatMoney(totalMoney)}, max: ${formatMoney(totalMaxMoney)}`)
-
-}
-
 const mutedFunctions = [
     "getServerRequiredHackingLevel",
     "getHackingLevel",
@@ -193,6 +147,12 @@ const mutedFunctions = [
     "scp",
     "sleep",
     "getServerMoneyAvailable",
+    "brutessh",
+    "ftpcrack",
+    "relaysmtp",
+    "httpworm",
+    "sqlinject",
+    "getServerNumPortsRequired"
 ]
 
 const moneyScript = "run.js"

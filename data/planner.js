@@ -1,5 +1,6 @@
 import {printTable} from "src/utils/table.js"
-import {formatMoney} from "src/utils/utils.js"
+import {formatMoney, progressBar} from "src/utils/utils.js"
+import {loadRunners} from "src/plannerRunnerData.js"
 
 /** @param {NS} ns */
 export async function main(ns) {
@@ -18,32 +19,9 @@ export async function main(ns) {
     do {
         ns.clearLog()
 
-        const colors = {
-            black: "\u001b[30m",
-            red: "\u001b[31m",
-            green: "\u001b[32m",
-            yellow: "\u001b[33m",
-            blue: "\u001b[34m",
-            magenta: "\u001b[35m",
-            cyan: "\u001b[36m",
-            white: "\u001b[37m",
-            brightBlack: "\u001b[30;1m",
-            brightRed: "\u001b[31;1m",
-            brightGreen: "\u001b[32;1m",
-            brightYellow: "\u001b[33;1m",
-            brightBlue: "\u001b[34;1m",
-            brightMagenta: "\u001b[35;1m",
-            brightCyan: "\u001b[36;1m",
-            brightWhite: "\u001b[37;1m",
-            reset: "\u001b[0m",
-        }
-        for (const key of Object.keys(colors)) {
-            ns.tprint(`${colors[key]}${key}`)
-        }
-
         lfn(`Current iteration: ${new Date().toTimeString()}, ${workCache.length}`)
-        const servers = loadDb(ns, lfn)
-        const computedActions = computeData(ns, servers, lfn)
+        const runners = loadRunners(ns, lfn)
+      /*  const computedActions = computeData(ns, servers, lfn)
         computedActions.sort((a, b) => {
             if (a.maxMoney > 0 && b.maxMoney > 0) {
                 return 0
@@ -52,14 +30,15 @@ export async function main(ns) {
             } else {
                 return 1
             }
-        })
-        printTable(lfn, computedActions, getServerStringData, {
-            padLeftColumns: [
-                0,
-                5,
-                6,
-            ],
-        })
+        })*/
+        /*        printTable(lfn, computedActions, getServerStringData, {
+                    padLeftColumns: [
+                        0,
+                        5,
+                        6,
+                    ],
+                })*/
+        printTable(lfn, runners, getRunnerStringData)
         await saveJobState(ns, lfn)
         if (continuous) {
             await ns.sleep(1000)
@@ -69,7 +48,7 @@ export async function main(ns) {
 
 /**
  * @param {NS} ns
- * @param {{server:string}[]} servers
+ * @param {PlannerServerData[]} servers
  * @param {(...args: any[]) => void} lfn
  * @returns {{
  * 	server: string;
@@ -95,10 +74,8 @@ function computeData(ns, servers, lfn) {
 
     for (const server of servers) {
         const name = server.server
-        const maxRamAvailable = ns.getServerMaxRam(name) * (server.maxRamPercentage ?? 1)
         const r = {
             server: name,
-            threads: Math.floor((maxRamAvailable - ns.getServerUsedRam(name)) / 2.0),
             maxMoney: ns.getServerMaxMoney(name),
             currentMoney: ns.getServerMoneyAvailable(name),
             hackChance: ns.hackAnalyzeChance(name),
@@ -129,17 +106,17 @@ function computeData(ns, servers, lfn) {
 
         for (let i = 1; i < threads; i++) {
 
-            lfn(`${i}: ${ns.weakenAnalyze(threads)}`);
+            lfn(`${i}: ${ns.weakenAnalyze(threads)}`)
             if (r.securityLevel - ns.weakenAnalyze(threads) <= r.minSecurityLevel) {
                 requiredThreadsToWeaken = i
                 break
             }
         }
 
-        const growthPerc = (r.maxMoney - r.currentMoney) / r.currentMoney;
+        const growthPerc = (r.maxMoney - r.currentMoney) / r.currentMoney
 
-    //   const threadsToGrowth =  ns.growthAnalyze(name, growthPerc);
-   //    const securityIncrease = ns.growthAnalyzeSecurity(threadsToGrowth, name)
+        //   const threadsToGrowth =  ns.growthAnalyze(name, growthPerc);
+        //    const securityIncrease = ns.growthAnalyzeSecurity(threadsToGrowth, name)
 
         r.action = `${threads.toFixed(0)} ${threadsWeaken.toFixed((4))} ${requiredThreadsToWeaken.toFixed(4)}`
 
@@ -172,105 +149,6 @@ function computeData(ns, servers, lfn) {
         }
     })
 
-    /*
-    const runnersForGrowth = []
-    while (availableRunners.length) {
-        const runner = availableRunners.shift()
-        const targetWeaken = availableTargets.map((target) => {
-            const finalSecurity = target.securityLevel - ns.weakenAnalyze(runner.threads + target.allocatedWeakenThreads)
-            return {
-                server: target.server,
-                canWeaken: finalSecurity >= target.minSecurityLevel,
-                securityDiff: finalSecurity - target.minSecurityLevel,
-            }
-        }).filter((item) => {
-            return item.canWeaken
-        }).sort((a, b) => {
-            if (a.securityDiff < b.securityDiff) {
-                return -1
-            } else if (a.securityDiff > b.securityDiff) {
-                return 1
-            } else {
-                return 0
-            }
-        })
-
-        if (targetWeaken.length) {
-            const finalTarget = targetWeaken[0]
-            runWork(ns, runner, "weaken", finalTarget.server)
-            availableTargetsMap.get(finalTarget.server).allocatedWeakenThreads += runner.threads
-        } else {
-            runnersForGrowth.push(runner)
-        }
-    }
-
-    const runnersForHack = []
-    while (runnersForGrowth.length) {
-        const runner = runnersForGrowth.shift()
-        const targetGrow = availableTargets.map((target) => {
-
-            const availableGrowth = target.reqGrowThreads - target.allocatedGrowThreads
-            const callCount = availableGrowth > runner.threads
-                ? availableGrowth / runner.threads
-                : 0
-            const totalTime = callCount * target.growTime
-            return {
-                server: target.server,
-                availableGrowth,
-                callCount,
-                totalTime,
-            }
-        }).filter((item) => {
-            return item.totalTime
-        }).sort((a, b) => {
-            if (a.totalTime < b.totalTime) {
-                return -1
-            } else if (a.totalTime > b.totalTime) {
-                return 1
-            } else {
-                return 0
-            }
-        })
-
-        if (targetGrow.length) {
-            const finalTarget = targetGrow[0]
-            runWork(ns, runner, "grow", finalTarget.server)
-            availableTargetsMap.get(finalTarget.server).allocatedGrowThreads += runner.threads
-        } else {
-            runnersForHack.push(runner)
-        }
-    }
-
-    while (runnersForHack.length) {
-        const runner = runnersForHack.shift()
-
-        const targetHack = availableTargets.map((target) => {
-            return {
-                server: target.server,
-                hackMoney: target.moneyForOneHack * runner.threads,
-                hackPerc: (target.moneyForOneHack * runner.threads) / target.maxMoney,
-            }
-        }).sort((a, b) => {
-            if (a.hackMoney > b.hackMoney) {
-                return -1
-            } else if (a.hackMoney < b.hackMoney) {
-                return 1
-            } else {
-                return 0
-            }
-        })
-
-        const full = targetHack.filter((item) => {
-            return item.hackPerc >= 100
-        })
-        if (full.length) {
-            const finalTarget = full[0]
-            runWork(ns, runner, "hack", finalTarget.server)
-            availableTargetsMap.get(finalTarget.server).allocatedHackThreads += runner.threads
-        }
-
-    }
-*/
     return result
 }
 
@@ -405,7 +283,13 @@ function getServerStringData(server, lfn) {
             ? formatMoney(server.currentMoney)
             : "",
         server.maxMoney > 0
-            ? progressBar(0, server.maxMoney, server.currentMoney, 0, requiredMinMoneyFill)
+            ? progressBar({
+                min: 0,
+                max: server.maxMoney,
+                current: server.currentMoney,
+                size: 0,
+                targetThreshold: requiredMinMoneyFill,
+            })
             : "",
         server.maxMoney > 0
             ? server.securityLevel.toFixed(4) // progressBar(server.minSecurityLevel, server.minSecurityLevel + hackSecurityOffset, server.securityLevel, 0)
@@ -423,9 +307,32 @@ function getServerStringData(server, lfn) {
             ? Math.round(server.hackTime / 1000.0)
             : "",
         server.job
-            ? progressBar(server.job.start, server.job.end, Math.floor(Date.now() / 1000), 10)
+            ? progressBar({
+                min: server.job.start,
+                max: server.job.end,
+                current: Math.floor(Date.now() / 1000),
+                size: 10,
+            })
             : "",
         server.action ?? "",
+    ]
+}
+
+/**
+ *
+ * @param {PlannerRunnerData}runner
+ * @returns {string[]}
+ */
+function getRunnerStringData(runner) {
+    if (!runner) {
+        return [
+            "Server",
+            "Threads available",
+        ]
+    }
+    return [
+        runner.server,
+        runner.threadsAvailable,
     ]
 }
 
@@ -435,84 +342,14 @@ function getUpdateProgressBar(max, current, size) {
             return null
         }
         return [
-            progressBar(0, max, current, size),
+            progressBar({
+                min: 0,
+                max,
+                current,
+                size,
+            }),
         ]
 
-    }
-}
-
-function progressBar(min, max, current, size, targetTresh = 0) {
-    const filli = size * targetTresh
-    const res = []
-    const fill = Math.min((current - min) * size / (max - min), size)
-    for (let i = 0; i < size; i++) {
-        const backgroud = i <= filli
-            ? "▒"
-            : "░"
-        res.push(i < fill
-            ? "█"
-            : backgroud)
-    }
-    const perc = Math.round((current - min) * 100 / (max - min))
-    return `${res.join("")} ${perc.toString().padStart(3)}%`
-}
-
-/**
- * @param {NS} ns
- * @param {(...args: any[]) => void} lfn
- * @returns {{server:string}[]}
- */
-function loadDb(ns, lfn) {
-    const resArray = []
-    try {
-        const fileContent = ns.read(db)
-        const json = JSON.parse(fileContent)
-        if (!Array.isArray(json)) {
-            return resArray
-        }
-
-        for (const serializedData of json) {
-            try {
-                const d = deserialize(serializedData)
-                if (d) {
-                    resArray.push(d)
-                }
-            } catch {
-            }
-        }
-
-        resArray.sort((a, b) => {
-            if (a.server < b.server) {
-                return -1
-            } else if (a.server > b.server) {
-                return 1
-            } else {
-                return 0
-            }
-        })
-
-        return resArray
-    } catch (a) {
-        lfn("!!! Error in loading ", a)
-        return resArray
-    }
-}
-
-/**
- * @returns {{server:string;threads:number; maxRamPercentage:number} | null}
- */
-function deserialize(object) {
-    if (!object.name) {
-        return null
-    }
-    if (!object.threadsAvailable) {
-        return null
-    }
-
-    return {
-        server: object.name,
-        threads: object.threadsAvailable,
-        maxRamPercentage: object.maxRamPercentage ?? 1,
     }
 }
 
@@ -549,7 +386,6 @@ const hackSecurityOffset = 5
 
 let workCache = []
 
-const db = "db.txt"
 const jobState = "jobStateTmp.txt"
 const mutedFunctions = [
     "getServerRequiredHackingLevel",

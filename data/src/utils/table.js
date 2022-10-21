@@ -2,7 +2,7 @@
  * @param {(...args: any[]) => void} lfn
  * @param {any[]} collection
  * @param {(any) => string[]} dataFn
- * @param {{padLeftColumns:number[];displayRowLines:boolean}| null} style
+ * @param {{padLeftColumns:number[];displayRowLines:boolean|undefined}| null} style
  */
 function printTable(lfn, collection, dataFn, style = null) {
     const columnsPadLeft = style?.padLeftColumns ?? []

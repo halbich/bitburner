@@ -1,0 +1,22 @@
+{
+  "name": "bitburner",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "sync": "bitburner-sync --watch"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bitburner-filesync": "^1.1.5"
+  },
+  "config": {
+    "bitburnerAuthToken": "loremIpsum",
+    "bitburnerScriptRoot": "./data",
+    "bitburnerAllowDelete": "false",
+    "bitburnerServerUrl": "127.0.0.1"
+  }
+}

@@ -1,4 +1,4 @@
-import {getRunScriptSize} from "/src/utils/utils.js"
+import {getRunScriptSize} from "src/utils/utils.js"
 
 class PlannerRunnerData {
     /**

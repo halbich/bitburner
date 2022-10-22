@@ -1,6 +1,6 @@
 import {getRunScriptSize} from "src/utils/utils.js"
 
-class PlannerRunnerData {
+class RunnerData {
     /**
      *
      * @param {string} server
@@ -11,6 +11,7 @@ class PlannerRunnerData {
         this._server = server
         this._maxRamPercentage = maxRamPercentage
         this._threadsAvailable = Math.floor((ns.getServerMaxRam(server) * maxRamPercentage - ns.getServerUsedRam(server)) / getRunScriptSize())
+        this._reservedThreads = 0
     }
 
     /**
@@ -31,14 +32,26 @@ class PlannerRunnerData {
      * @returns {number}
      */
     get threadsAvailable() {
-        return this._threadsAvailable
+        return this._threadsAvailable - this._reservedThreads
+    }
+
+    /**
+     *
+     * @param {number} threads
+     */
+    reserveThreads(threads) {
+        this._reservedThreads += threads
+    }
+
+    get reservedThreads() {
+        return this._reservedThreads
     }
 }
 
 /**
  * @param {object} object
  * @param {NS} ns
- * @returns {PlannerRunnerData | null}
+ * @returns {RunnerData | null}
  */
 function deserialize(object, ns) {
     if (!object.name) {
@@ -48,16 +61,16 @@ function deserialize(object, ns) {
         return null
     }
 
-    return new PlannerRunnerData(object.name, object.maxRamPercentage ?? 1, ns)
+    return new RunnerData(object.name, object.maxRamPercentage ?? 1, ns)
 }
 
 /**
  * @param {NS} ns
  * @param {(...args: any[]) => void} lfn
- * @returns {PlannerRunnerData[]}}
+ * @returns {RunnerData[]}}
  */
 export function loadRunners(ns, lfn) {
-    /** @type {PlannerRunnerData[]} */
+    /** @type {RunnerData[]} */
     const resArray = []
     try {
         const fileContent = ns.read(db)
@@ -94,3 +107,7 @@ export function loadRunners(ns, lfn) {
 }
 
 const db = "db.txt"
+
+
+
+

@@ -70,7 +70,7 @@ export function progressBar({
     const res = []
     const fill = Math.min((current - min) * size / (max - min), size)
     for (let i = 0; i < size; i++) {
-        const background = i <= filli
+        const background = i < filli
             ? "▒"
             : "░"
         res.push(i < fill

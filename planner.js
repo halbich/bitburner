@@ -102,6 +102,7 @@ function tryFillGrow(needFill, availableRunners, ns, jobs) {
  * target: string;
  * action: string;
  * jobTime: number;
+ * startOffset: number | undefined;
  * }}
  */
 function fillRunners(availableRunners, ns, jobs, {
@@ -109,6 +110,7 @@ function fillRunners(availableRunners, ns, jobs, {
     target,
     action,
     jobTime,
+    startOffset = undefined,
 }) {
 
     let remainingThreadsToFill = threadsToFill
@@ -126,6 +128,7 @@ function fillRunners(availableRunners, ns, jobs, {
                 threads: remainingThreadsToFill,
                 start: Date.now(),
                 end: Date.now() + jobTime + scriptOffset,
+                startOffset,
             })
             runWork(ns, runner, job, jobs)
             remainingThreadsToFill -= job.threads
@@ -137,6 +140,7 @@ function fillRunners(availableRunners, ns, jobs, {
                 threads: runner.threadsAvailable,
                 start: Date.now(),
                 end: Date.now() + jobTime + scriptOffset,
+                startOffset,
             })
             runWork(ns, runner, job, jobs)
             remainingThreadsToFill -= job.threads
@@ -228,11 +232,35 @@ function processJobs(ns, runners, targets, jobs, lfn) {
         }
         remainingAvailable -= hacks.totalThreads
         const times = computeBatch(target, lfn)
-        for (const time of times) {
-            lfn(time)
-        }
 
-        lfn(available)
+        fillRunners(availableRunners, ns, jobs, {
+            threadsToFill: hacks.hackThreads,
+            target: target.server,
+            action: "hack",
+            jobTime: times[0][1] - times[0][0],
+            startOffset: times[0][0],
+        })
+        fillRunners(availableRunners, ns, jobs, {
+            threadsToFill: hacks.threadsToWeakenHack,
+            target: target.server,
+            action: "weaken",
+            jobTime: times[1][1] - times[1][0],
+            startOffset: times[1][0],
+        })
+        fillRunners(availableRunners, ns, jobs, {
+            threadsToFill: hacks.growthThreads,
+            target: target.server,
+            action: "grow",
+            jobTime: times[2][1] - times[2][0],
+            startOffset: times[2][0],
+        })
+        fillRunners(availableRunners, ns, jobs, {
+            threadsToFill: hacks.threadsToWeakenGrow,
+            target: target.server,
+            action: "weaken",
+            jobTime: times[3][1] - times[3][0],
+            startOffset: times[3][0],
+        })
     }
 
     while (batchTargets.length) {
@@ -249,7 +277,6 @@ function processJobs(ns, runners, targets, jobs, lfn) {
 function computeBatch(target, lfn) {
     target.note = "batching"
     const hacks = target.getHackStats(stealingPercent)
-    lfn(hacks)
     const times = [
         [
             hacks.weakenTime - 3 * scriptOffset - hacks.hackTime,
@@ -291,7 +318,14 @@ function runWork(ns, runner, job, jobs) {
         return null
     }
 
-    const params = ["--threads", job.threads, "--target", job.target, "--action", job.action]
+    const params = [
+        "--threads",
+        job.threads,
+        "--target",
+        job.target,
+        "--action",
+        job.action,
+    ]
 
     if (!ns.exec(hackScript, runner.server, job.threads, ...params)) {
         return null
@@ -416,6 +450,7 @@ const mutedFunctions = [
     "getServerSecurityLevel",
     "getServerMinSecurityLevel",
     "exec",
+    "getServerUsedRam"
 ]
 
 const stealingPercent = 0.1

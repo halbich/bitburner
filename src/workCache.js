@@ -7,6 +7,7 @@ export class WorkJob {
      * @param {number} start
      * @param {number} end
      * @param {number} threads
+     * @param {number|undefined} startOffset
      */
     constructor({
                     runner,
@@ -15,6 +16,7 @@ export class WorkJob {
                     start,
                     end,
                     threads,
+                    startOffset,
                 }) {
         this.runner = runner
         this.target = target
@@ -22,6 +24,7 @@ export class WorkJob {
         this.start = Math.floor(start)
         this.end = Math.ceil(end)
         this.threads = threads
+        this.startOffset = startOffset
     }
 }
 

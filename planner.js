@@ -176,15 +176,6 @@ function processJobs(ns, runners, targets, jobs, lfn) {
         }
     })
 
-    const needFill = targets.map((item) => {
-        return item.getUpgradeStats()
-    }).filter((item) => {
-        return item && (item.threadsToWeaken > 0 || item.growthThreads > 0)
-    })
-
-    tryFillWeaken(needFill, availableRunners, ns, jobs)
-    tryFillGrow(needFill, availableRunners, ns, jobs)
-
     const available = availableRunners.filter((item) => {
         return item.threadsAvailable
     })
@@ -267,6 +258,15 @@ function processJobs(ns, runners, targets, jobs, lfn) {
         const target = batchTargets.shift()
         target.note = target.note ?? "not Enough RAM"
     }
+
+    const needFill = targets.map((item) => {
+        return item.getUpgradeStats()
+    }).filter((item) => {
+        return item && (item.threadsToWeaken > 0 || item.growthThreads > 0)
+    })
+
+    tryFillWeaken(needFill, availableRunners, ns, jobs)
+    tryFillGrow(needFill, availableRunners, ns, jobs)
 }
 
 /**
@@ -326,6 +326,13 @@ function runWork(ns, runner, job, jobs) {
         "--action",
         job.action,
     ]
+
+    if (job.startOffset) {
+        params.push(...[
+            "--delay",
+            job.startOffset,
+        ])
+    }
 
     if (!ns.exec(hackScript, runner.server, job.threads, ...params)) {
         return null
@@ -450,8 +457,8 @@ const mutedFunctions = [
     "getServerSecurityLevel",
     "getServerMinSecurityLevel",
     "exec",
-    "getServerUsedRam"
+    "getServerUsedRam",
 ]
 
-const stealingPercent = 0.1
+const stealingPercent = 0.5
 const scriptOffset = 100

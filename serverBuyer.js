@@ -3,6 +3,7 @@ import {formatMoney} from "src/utils/utils.js"
 /** @param {NS} ns */
 export async function main(ns) {
 
+
     const money = ns.getPlayer().money
     const available = []
     for (let i = 1; i < 21; i++) {

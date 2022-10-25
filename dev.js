@@ -8,7 +8,7 @@ export async function main(ns) {
 
     while (true) {
 
-        const pid = ns.run("planner.js")
+        const pid = ns.run("./src/planner.js")
         if (!pid) {
             const continueWithDev = await ns.prompt("Continue?", {type: "boolean"})
             if (!continueWithDev) {

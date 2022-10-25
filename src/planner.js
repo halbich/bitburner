@@ -1,8 +1,8 @@
 import {printTable} from "src/utils/table.js"
 import {formatMoney, progressBar} from "src/utils/utils.js"
-import {loadRunners} from "src/runnerData.js"
-import {loadTargets} from "src/targetData.js"
-import {WorkCache, WorkJob} from "src/workCache.js"
+import {loadRunners} from "src/models/runnerData.js"
+import {loadTargets} from "src/models/targetData.js"
+import {WorkJobs, WorkJob} from "src/models/workJobs.js"
 
 /** @param {NS} ns */
 export async function main(ns) {
@@ -18,17 +18,23 @@ export async function main(ns) {
 
     do {
         ns.clearLog()
-
+        const start = Date.now()
         lfn(`Current iteration: ${new Date().toTimeString()}`)
-        const jobs = new WorkCache(ns, lfn)
+
+        const jobs = new WorkJobs(ns, lfn)
         const runners = loadRunners(ns, lfn)
         const targets = loadTargets(ns, jobs, lfn)
 
+        lfn(`load ${Date.now() - start} ms`)
+
         processJobs(ns, runners, targets, jobs, lfn)
 
+        lfn(`process ${Date.now() - start} ms`)
         //printTable(lfn, runners, getRunnerStringData)
         printTable(lfn, targets, getTargetStringData)
         await jobs.saveJobState(ns, lfn)
+
+        lfn(`Iteration done in ${Date.now() - start} ms`)
         if (continuous) {
             await ns.sleep(1000)
         }
@@ -39,7 +45,7 @@ export async function main(ns) {
  * @param {({server: string, threadsToWeaken: number, timeToWeaken: number, growthThreads: number, timeToGrow: number, growthThreadsRemaining: number}|null)[]} needFill
  * @param {RunnerData[]} availableRunners
  * @param {NS} ns
- * @param {WorkCache} jobs
+ * @param {WorkJobs} jobs
  * @param {number} now
  */
 function tryFillWeaken(needFill, availableRunners, ns, jobs, now) {
@@ -57,10 +63,12 @@ function tryFillWeaken(needFill, availableRunners, ns, jobs, now) {
     while (needWeaken.length) {
         const weaken = needWeaken.shift()
         fillRunners(availableRunners, ns, jobs, now, {
-            threadsToFill: weaken.threadsToWeaken,
+            threads: weaken.threadsToWeaken,
             target: weaken.server,
             action: "weaken",
-            jobTime: weaken.timeToWeaken + scriptOffset,
+            duration: weaken.timeToWeaken,
+            endOffset: scriptOffset,
+            amount: -1,
         })
     }
 }
@@ -69,7 +77,7 @@ function tryFillWeaken(needFill, availableRunners, ns, jobs, now) {
  * @param {({server: string, threadsToWeaken: number, timeToWeaken: number, growthThreads: number, timeToGrow: number, growthThreadsRemaining: number}|null)[]} needFill
  * @param {RunnerData[]} availableRunners
  * @param {NS} ns
- * @param {WorkCache} jobs
+ * @param {WorkJobs} jobs
  * @param {number} now
  */
 function tryFillGrow(needFill, availableRunners, ns, jobs, now) {
@@ -87,10 +95,13 @@ function tryFillGrow(needFill, availableRunners, ns, jobs, now) {
     while (needGrow.length) {
         const weaken = needGrow.shift()
         fillRunners(availableRunners, ns, jobs, now, {
-            threadsToFill: weaken.growthThreads,
+            threads: weaken.growthThreads,
             target: weaken.server,
             action: "grow",
-            jobTime: weaken.timeToGrow + scriptOffset,
+            duration: weaken.timeToGrow,
+            endOffset: scriptOffset,
+            amount: -1,
+
         })
     }
 }
@@ -98,27 +109,33 @@ function tryFillGrow(needFill, availableRunners, ns, jobs, now) {
 /**
  * @param {RunnerData[]} availableRunners
  * @param {NS} ns
- * @param {WorkCache} jobs
+ * @param {WorkJobs} jobs
  * @param {number} now
  * @param {{
- * threadsToFill:number;
+ * threads:number;
  * target: string;
  * action: string;
- * jobTime: number;
+ * amount: number;
+ * duration: number;
  * startOffset: number | undefined;
- * }}
+ * endOffset: number | undefined;
+ * }} jobParams
  * @param {TargetData | undefined} targetServer
  */
-function fillRunners(availableRunners, ns, jobs, now, {
-                         threadsToFill,
-                         target,
-                         action,
-                         jobTime,
-                         startOffset = undefined,
-                     },
+function fillRunners(availableRunners, ns, jobs, now, jobParams,
                      targetServer = undefined) {
 
-    let remainingThreadsToFill = threadsToFill
+    const {
+        threads,
+        target,
+        action,
+        amount,
+        duration,
+        startOffset,
+        endOffset,
+    } = jobParams
+
+    let remainingThreadsToFill = threads
     while (availableRunners.length && remainingThreadsToFill) {
         const runner = availableRunners.shift()
         if (!runner.threadsAvailable) {
@@ -132,10 +149,10 @@ function fillRunners(availableRunners, ns, jobs, now, {
                 action,
                 threads: remainingThreadsToFill,
                 start: now,
-                end: now + jobTime,
+                end: now + duration + endOffset,
                 startOffset,
             })
-            runWork(ns, runner, job, jobs, targetServer)
+            runWork(ns, runner, job, jobs, targetServer, amount, duration)
             remainingThreadsToFill -= job.threads
         } else {
             const job = new WorkJob({
@@ -144,10 +161,10 @@ function fillRunners(availableRunners, ns, jobs, now, {
                 action,
                 threads: runner.threadsAvailable,
                 start: now,
-                end: now + jobTime,
+                end: now + duration + endOffset,
                 startOffset,
             })
-            runWork(ns, runner, job, jobs, targetServer)
+            runWork(ns, runner, job, jobs, targetServer, amount, duration)
             remainingThreadsToFill -= job.threads
         }
 
@@ -162,7 +179,7 @@ function fillRunners(availableRunners, ns, jobs, now, {
  * @param {NS} ns
  * @param {RunnerData[]} runners
  * @param {TargetData[]} targets
- * @param {WorkCache} jobs
+ * @param {WorkJobs} jobs
  * @param {(...args: any[]) => void} lfn
  */
 function processJobs(ns, runners, targets, jobs, lfn) {
@@ -189,8 +206,6 @@ function processJobs(ns, runners, targets, jobs, lfn) {
     const totalAvailable = available.reduce((partial, a) => {
         return partial + a.threadsAvailable
     }, 0)
-
-
 
     const batchTargets = targets.filter((item) => {
         const upgrade = item.getUpgradeStats()
@@ -222,7 +237,7 @@ function processJobs(ns, runners, targets, jobs, lfn) {
     })
 
     let remainingAvailable = totalAvailable
-    while (batchTargets.length && remainingAvailable > 0) {
+    while (false && batchTargets.length && remainingAvailable > 0) {
         const target = batchTargets.shift()
         const hacks = target.getHackStats(stealingPercent)
         if (hacks.totalThreads > remainingAvailable) {
@@ -249,32 +264,40 @@ function processJobs(ns, runners, targets, jobs, lfn) {
 
         const originalSize = target.jobs.length
         fillRunners(availableRunners, ns, jobs, now, {
-            threadsToFill: hacks.hackThreads,
+            threads: hacks.hack.threads,
+            amount: hacks.hack.amount,
+            duration: hacks.hack.duration,
             target: target.server,
             action: "hack",
-            jobTime: times[0][1] + 3 * scriptOffset,
             startOffset: times[0][0],
+            endOffset: 4 * scriptOffset,
         }, target)
         fillRunners(availableRunners, ns, jobs, now, {
-            threadsToFill: hacks.threadsToWeakenHack,
+            threads: hacks.weakenHack.threads,
+            amount: hacks.weakenHack.amount,
+            duration: hacks.weakenHack.duration,
             target: target.server,
             action: "weaken",
-            jobTime: times[1][1] + 2 * scriptOffset,
             startOffset: times[1][0],
+            endOffset: 3 * scriptOffset,
         }, target)
         fillRunners(availableRunners, ns, jobs, now, {
-            threadsToFill: hacks.growthThreads,
+            threads: hacks.grow.threads,
+            amount: hacks.grow.amount,
+            duration: hacks.grow.duration,
             target: target.server,
             action: "grow",
-            jobTime: times[2][1] + scriptOffset,
             startOffset: times[2][0],
+            endOffset: 2 * scriptOffset,
         }, target)
         fillRunners(availableRunners, ns, jobs, now, {
-            threadsToFill: hacks.threadsToWeakenGrow,
+            threads: hacks.weakenGrow.threads,
+            amount: hacks.weakenGrow.amount,
+            duration: hacks.weakenGrow.duration,
             target: target.server,
             action: "weaken",
-            jobTime: times[3][1],
             startOffset: times[3][0],
+            endOffset: scriptOffset,
         }, target)
 
         if (target.server === "n00dles") {
@@ -312,20 +335,20 @@ function computeBatch(target, lfn) {
     const hacks = target.getHackStats(stealingPercent)
     const times = [
         [
-            hacks.weakenTime - 3 * scriptOffset - hacks.hackTime,
-            hacks.weakenTime - 3 * scriptOffset,
+            hacks.weakenHack.duration - 3 * scriptOffset - hacks.hack.duration,
+            hacks.weakenHack.duration - 3 * scriptOffset,
         ],
         [
-            hacks.weakenTime - 2 * scriptOffset - hacks.weakenTime,
-            hacks.weakenTime - 2 * scriptOffset,
+            hacks.weakenHack.duration - 2 * scriptOffset - hacks.weakenHack.duration,
+            hacks.weakenHack.duration - 2 * scriptOffset,
         ],
         [
-            hacks.weakenTime - scriptOffset - hacks.growTime,
-            hacks.weakenTime - scriptOffset,
+            hacks.weakenHack.duration - scriptOffset - hacks.grow.duration,
+            hacks.weakenHack.duration - scriptOffset,
         ],
         [
             0,
-            hacks.weakenTime,
+            hacks.weakenGrow.duration,
         ],
     ]
 
@@ -342,11 +365,13 @@ function computeBatch(target, lfn) {
  * @param {NS} ns
  * @param {RunnerData} runner
  * @param {WorkJob} job
- * @param {WorkCache} jobs
+ * @param {WorkJobs} jobs
  * @param {TargetData| undefined} targetServer
+ * @param {number|undefined} expectedAmount
+ * @param {number|undefined} expectedDuration
  * @returns {WorkJob|null}
  */
-function runWork(ns, runner, job, jobs, targetServer = undefined) {
+function runWork(ns, runner, job, jobs, targetServer = undefined, expectedAmount = undefined, expectedDuration = undefined) {
 
     if (!job.threads || job.threads < 1) {
         return null
@@ -368,7 +393,24 @@ function runWork(ns, runner, job, jobs, targetServer = undefined) {
         ])
     }
 
-    if (!ns.exec(hackScript, runner.server, job.threads, ...params)) {
+    if (expectedAmount) {
+        params.push(...[
+            "--expectedAmount",
+            expectedAmount,
+        ])
+
+    }
+
+    if (expectedDuration) {
+        params.push(...[
+            "--expectedDuration",
+            expectedDuration,
+        ])
+
+    }
+
+    const pid = ns.exec(hackScript, runner.server, job.threads, ...params);
+    if (!pid) {
         return null
     }
     runner.reserveThreads(job.threads)
@@ -479,7 +521,7 @@ function getUpdateProgressBar(max, current, size) {
     }
 }
 
-const hackScript = "run.js"
+const hackScript = "/src/run.js"
 
 const mutedFunctions = [
     "getServerRequiredHackingLevel",

@@ -106,7 +106,7 @@ export function loadRunners(ns, lfn) {
     }
 }
 
-const db = "db.txt"
+const db = "/data/db.txt"
 
 
 

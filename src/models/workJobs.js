@@ -28,7 +28,7 @@ export class WorkJob {
     }
 }
 
-export class WorkCache {
+export class WorkJobs {
 
     /**
      * @param {NS} ns
@@ -38,16 +38,16 @@ export class WorkCache {
         /**
          * @type {WorkJob[]}
          */
-        this.workCache = []
+        this.workJobs = []
         this.loadJobState(ns, lfn)
     }
 
     get length() {
-        return this.workCache.length
+        return this.workJobs.length
     }
 
     get jobs() {
-        return this.workCache
+        return this.workJobs
     }
 
     /**
@@ -78,7 +78,7 @@ export class WorkCache {
      */
     async saveJobState(ns, lfn) {
         try {
-            await ns.write(jobState, JSON.stringify(this.workCache, null, 4), "w")
+            await ns.write(jobState, JSON.stringify(this.workJobs, null, 4), "w")
         } catch (a) {
             lfn("!!! Error in saving jobState ", a)
         }
@@ -89,8 +89,8 @@ export class WorkCache {
      * @param {WorkJob[]} jobs
      */
     addJobs(jobs) {
-        this.workCache.push(...jobs)
-        this.workCache.sort((a, b) => {
+        this.workJobs.push(...jobs)
+        this.workJobs.sort((a, b) => {
             if (a.end > b.end) {
                 return -1
             } else if (a.end < b.end) {

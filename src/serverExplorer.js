@@ -1,4 +1,4 @@
-import {ServerData, loadServerData, saveServerData} from "src/serverData.js"
+import {ServerData, loadServerData, saveServerData} from "src/models/serverData.js"
 import {formatMoney} from "src/utils/utils.js"
 
 /** @param {NS} ns */
@@ -19,7 +19,9 @@ export async function main(ns) {
 
     do {
         ns.clearLog()
+        const start = Date.now()
         lfn(`Current iteration: ${new Date().toTimeString()}`)
+
         const index = loadServerData(ns, lfn)
 
         if (!index.size) {
@@ -37,7 +39,8 @@ export async function main(ns) {
         }
 
         saveServerData(ns, index, lfn)
-        lfn("Iteration done")
+        lfn(`Iteration done in ${Date.now() - start} ms`)
+
         if (continuous) {
             await ns.sleep(index.size > originalServersCount
                 ? 500
@@ -155,5 +158,5 @@ const mutedFunctions = [
     "getServerNumPortsRequired"
 ]
 
-const moneyScript = "run.js"
+const moneyScript = "/src/run.js"
 const moneyScriptRam = 2 // getScriptRam returned null instead of 2;

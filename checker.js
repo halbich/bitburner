@@ -1,8 +1,8 @@
 import {printTable} from "src/utils/table.js"
 import {formatMoney, progressBar} from "src/utils/utils.js"
-import {loadRunners} from "src/runnerData.js"
-import {loadTargets} from "src/targetData.js"
-import {WorkCache, WorkJob} from "src/workCache.js"
+import {loadRunners} from "src/models/runnerData.js"
+import {loadTargets} from "src/models/targetData.js"
+import {WorkJobs, WorkJob} from "src/models/workJobs.js"
 
 /** @param {NS} ns */
 export async function main(ns) {
@@ -18,15 +18,18 @@ export async function main(ns) {
 
     do {
         ns.clearLog()
-
+        const start = Date.now()
         lfn(`Current iteration: ${new Date().toTimeString()}`)
-        const jobs = new WorkCache(ns, lfn)
+
+        const jobs = new WorkJobs(ns, lfn)
         const runners = loadRunners(ns, lfn)
         const targets = loadTargets(ns, jobs, lfn)
 
         printTable(lfn, runners, getRunnerStringData)
         printTable(lfn, targets, getTargetStringData)
-        await jobs.saveJobState(ns, lfn)
+
+        lfn(`Iteration done in ${Date.now() - start} ms`)
+
         if (continuous) {
             await ns.sleep(1000)
         }

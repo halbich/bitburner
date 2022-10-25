@@ -1,45 +1,23 @@
-
 /** @param {NS} ns */
 export async function main(ns) {
-    ns.write(db, "[]");
+    ns.write(db, "[]")
 
-    let targetServer = home;
-    if (ns.serverExists(runnerName)) {
-        await safeCopy(ns, autohacker);
-        await safeCopy(ns, planner);
-        await safeCopy(ns, systemScript);
-        await safeCopy(ns, table);
-        await safeCopy(ns, utils);
-        await safeCopy(ns, autoScaler);
-        targetServer = runnerName;
-    }
+    let target = home
 
-    const target = ns.getScriptRam(systemScript) + ns.getScriptRam(planner) <= ns.getServerMaxRam(targetServer) ? targetServer : home
-    ns.tprint(`${targetServer}, ${target}`);
+    ns.scriptKill(planner, target)
+    ns.scriptKill(autoScaler, target)
+    ns.scriptKill(systemScript, target)
 
-    ns.exec(systemScript, target, 1, "c");
-    ns.exec(planner, target, 1, "c");
-    ns.exec(autoScaler, target);
+    ns.tprint(`Running scripts at ${target}`)
+
+    ns.exec(systemScript, target, 1, "c")
+    ns.exec(planner, target, 1, "c")
+    ns.exec(autoScaler, target)
 
 }
 
-/**
- * @param {NS} ns
- * @param {string} script
- */
-async function safeCopy(ns, script) {
-    ns.rm(script, runnerName);
-    await ns.scp(script, runnerName);
-}
-
-const runnerName = "runner";
-
-const autohacker = "run.js";
-const planner = "planner.js";
-const autoScaler = "scaleHacknet.js"
-const systemScript = "system.js";
-const table = "table.js";
-const utils = "utils.js";
-const db = "db.txt"
-
-const home = "home";
+const planner = "/src/planner.js"
+const autoScaler = "/src/hacknetScaler.js"
+const systemScript = "/src/serverExplorer.js"
+const db = "/data/db.txt"
+const home = "home"

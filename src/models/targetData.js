@@ -1,4 +1,4 @@
-import {WorkCache, WorkJob} from "src/workCache"
+import {WorkJobs, WorkJob} from "src/models/workJobs"
 
 class TargetData {
 
@@ -72,17 +72,13 @@ class TargetData {
     /**
      * @param {number} stealingPercent
      * @return {{
-     *     hackThreads: number;
-     *             threadsToWeakenHack : number;
-     *             growthThreads:number;
-     *             threadsToWeakenGrow:number;
-     *             totalThreads:number;
-     *             hackTime:number;
-     *             growTime:number;
-     *             weakenTime:number;
-     *             pipelineLength:number;
-     *             hackAmount:number;
-     *             expectedRevenue:number;
+     *      hack: {amount: number; threads: number; duration: number},
+     *      weakenHack: {amount: number; threads: number; duration: number},
+     *      grow: {amount: number; threads: number; duration: number},
+     *      weakenGrow: {amount: number; threads: number; duration: number},
+     *      totalThreads:number;
+     *      pipelineLength:number;
+     *      expectedRevenue:number;
      * }}
      */
     getHackStats(stealingPercent = 0.5) {
@@ -98,17 +94,13 @@ class TargetData {
     /**
      * @param {number} stealingPercent
      * @return {{
-     *     hackThreads: number;
-     *             threadsToWeakenHack : number;
-     *             growthThreads:number;
-     *             threadsToWeakenGrow:number;
-     *             totalThreads:number;
-     *             hackTime:number;
-     *             growTime:number;
-     *             weakenTime:number;
-     *             pipelineLength:number;
-     *             hackAmount:number;
-     *             expectedRevenue:number;
+     *      hack: {amount: number; threads: number; duration: number},
+     *      weakenHack: {amount: number; threads: number; duration: number},
+     *      grow: {amount: number; threads: number; duration: number},
+     *      weakenGrow: {amount: number; threads: number; duration: number},
+     *      totalThreads:number;
+     *      pipelineLength:number;
+     *      expectedRevenue:number;
      * }}
      */
     _getHackStats(stealingPercent = 0.5) {
@@ -124,7 +116,7 @@ class TargetData {
 
         const growthThreads = Math.ceil(ns.growthAnalyze(this.server, 1.0 / stealingPercent))
 
-        const growthSecurityIncrease =  2 * 0.002 * growthThreads // ns.growthAnalyzeSecurity(growthThreads, this.server, 1)
+        const growthSecurityIncrease = 2 * 0.002 * growthThreads // ns.growthAnalyzeSecurity(growthThreads, this.server, 1)
 
         let threadsToWeakenGrow = 0
         while (ns.weakenAnalyze(threadsToWeakenGrow) < growthSecurityIncrease) {
@@ -137,16 +129,29 @@ class TargetData {
         const pipelineLength = Math.max(hackTime, growTime, weakenTime)
 
         return {
-            hackThreads,
-            threadsToWeakenHack,
-            growthThreads,
-            threadsToWeakenGrow,
+            hack: {
+                amount: hackAmount,
+                threads: hackThreads,
+                duration: hackTime,
+            },
+            weakenHack: {
+                amount: hackSecurityIncrease,
+                threads: threadsToWeakenHack,
+                duration: weakenTime,
+            },
+            grow: {
+                amount: hackAmount,
+                threads: growthThreads,
+                duration: growTime,
+            },
+            weakenGrow: {
+                amount: growthSecurityIncrease,
+                threads: threadsToWeakenGrow,
+                duration: weakenTime
+
+            },
             totalThreads: hackThreads + threadsToWeakenHack + growthThreads + threadsToWeakenGrow,
-            hackTime,
-            growTime,
-            weakenTime,
             pipelineLength,
-            hackAmount,
             expectedRevenue: Math.round(hackAmount / pipelineLength),
         }
     }
@@ -250,7 +255,7 @@ class TargetData {
         return this._allocatedGrowThreads
     }
 
-     get isBatching() {
+    get isBatching() {
         const batches = this.jobs.length > 0 && this.jobs.length % 4 === 0
         if (!batches) {
             return false
@@ -279,11 +284,11 @@ class TargetData {
 
 /**
  * @param {object} object
- * @param {WorkCache} workCache
+ * @param {WorkJobs} workJobs
  * @param {NS} ns
  * @returns {TargetData | null}
  */
-function deserialize(object, workCache, ns) {
+function deserialize(object, workJobs, ns) {
     if (!object.name) {
         return null
     }
@@ -291,7 +296,7 @@ function deserialize(object, workCache, ns) {
         return null
     }
 
-    const jobs = workCache.jobs.filter((item) => {
+    const jobs = workJobs.jobs.filter((item) => {
         return item.target === object.name
     })
     return new TargetData(object.name, jobs, ns)
@@ -299,11 +304,11 @@ function deserialize(object, workCache, ns) {
 
 /**
  * @param {NS} ns
- * @param {WorkCache} workCache
+ * @param {WorkJobs} workJobs
  * @param {(...args: any[]) => void} lfn
  * @returns {TargetData[]}}
  */
-export function loadTargets(ns, workCache, lfn) {
+export function loadTargets(ns, workJobs, lfn) {
     /** @type {TargetData[]} */
     const resArray = []
     try {
@@ -315,7 +320,7 @@ export function loadTargets(ns, workCache, lfn) {
 
         for (const serializedData of json) {
             try {
-                const d = deserialize(serializedData, workCache, ns)
+                const d = deserialize(serializedData, workJobs, ns)
                 if (d) {
                     resArray.push(d)
                 }
@@ -340,4 +345,4 @@ export function loadTargets(ns, workCache, lfn) {
     }
 }
 
-const db = "db.txt"
+const db = "/data/db.txt"

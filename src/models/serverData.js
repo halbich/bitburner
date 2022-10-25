@@ -181,6 +181,6 @@ const savedProperties = [
     "scriptingAvailable",
     "parent",
 ]
-const db = "db.txt"
+const db = "/data/db.txt"
 
 export {ServerData, loadServerData, saveServerData}

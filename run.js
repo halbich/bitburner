@@ -48,4 +48,7 @@ export async function main(ns) {
             ns.print("Invalid action!")
         }
     }
+    if(target === "n00dles") {
+        ns.tprint(action);
+    }
 }

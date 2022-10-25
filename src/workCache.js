@@ -19,10 +19,10 @@ export class WorkJob {
                     startOffset,
                 }) {
         this.runner = runner
-        this.target = target
-        this.action = action
         this.start = Math.floor(start)
         this.end = Math.ceil(end)
+        this.target = target
+        this.action = action
         this.threads = threads
         this.startOffset = startOffset
     }
@@ -91,9 +91,9 @@ export class WorkCache {
     addJobs(jobs) {
         this.workCache.push(...jobs)
         this.workCache.sort((a, b) => {
-            if (a.start > b.start) {
+            if (a.end > b.end) {
                 return -1
-            } else if (a.start < b.start) {
+            } else if (a.end < b.end) {
                 return 1
             } else {
                 return 0

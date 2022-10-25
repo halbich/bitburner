@@ -124,7 +124,7 @@ class TargetData {
 
         const growthThreads = Math.ceil(ns.growthAnalyze(this.server, 1.0 / stealingPercent))
 
-        const growthSecurityIncrease = 2 * 0.002 * growthThreads // ns.growthAnalyzeSecurity(growthThreads, this.server, 1)
+        const growthSecurityIncrease =  2 * 0.002 * growthThreads // ns.growthAnalyzeSecurity(growthThreads, this.server, 1)
 
         let threadsToWeakenGrow = 0
         while (ns.weakenAnalyze(threadsToWeakenGrow) < growthSecurityIncrease) {
@@ -202,6 +202,15 @@ class TargetData {
      */
     set jobs(value) {
         this._jobs = value
+        this._jobs.sort((a, b) => {
+            if (a.end < b.end) {
+                return -1
+            } else if (a.end > b.end) {
+                return 1
+            } else {
+                return 0
+            }
+        })
         this._allocatedGrowThreads = value.reduce((partial, a) => {
             return partial + (a.action === "grow"
                 ? a.threads
@@ -220,6 +229,15 @@ class TargetData {
 
     }
 
+    /**
+     *
+     * @param {WorkJob[]} jobs
+     */
+    addJobs(jobs) {
+        this._jobs.push(...jobs)
+        this.jobs = (this._jobs)
+    }
+
     get allocatedHackThreads() {
         return this._allocatedHackThreads
     }
@@ -230,6 +248,31 @@ class TargetData {
 
     get allocatedGrowThreads() {
         return this._allocatedGrowThreads
+    }
+
+     get isBatching() {
+        const batches = this.jobs.length > 0 && this.jobs.length % 4 === 0
+        if (!batches) {
+            return false
+        }
+
+        const growJobs = this.jobs.reduce((partial, a) => {
+            return partial + (a.action === "grow"
+                ? 1
+                : 0)
+        }, 0)
+        const weakenJobs = this.jobs.reduce((partial, a) => {
+            return partial + (a.action === "weaken"
+                ? 1
+                : 0)
+        }, 0)
+        const hackJobs = this.jobs.reduce((partial, a) => {
+            return partial + (a.action === "hack"
+                ? 1
+                : 0)
+        }, 0)
+
+        return growJobs === hackJobs && growJobs === weakenJobs / 2 && (growJobs + hackJobs + weakenJobs) === this.jobs.length
     }
 
 }

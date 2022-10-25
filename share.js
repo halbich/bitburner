@@ -51,7 +51,7 @@ export async function main(ns) {
 }
 
 function tryShare(ns, host) {
-    const available = Math.floor((ns.getServerMaxRam(host) * 0.9 - ns.getServerUsedRam(host)) / 7.15)
+    const available = Math.floor((ns.getServerMaxRam(host)  - ns.getServerUsedRam(host)) / 7.10)
     if (available > 0) {
         ns.exec(script, host, available, "--share", true, "--host", host)
     }

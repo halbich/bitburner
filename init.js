@@ -1,6 +1,8 @@
 
 /** @param {NS} ns */
 export async function main(ns) {
+    ns.write(db, "[]");
+
     let targetServer = home;
     if (ns.serverExists(runnerName)) {
         await safeCopy(ns, autohacker);
@@ -38,5 +40,6 @@ const autoScaler = "scaleHacknet.js"
 const systemScript = "system.js";
 const table = "table.js";
 const utils = "utils.js";
+const db = "db.txt"
 
 const home = "home";

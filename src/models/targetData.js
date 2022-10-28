@@ -1,28 +1,19 @@
-import {TargetState} from "src/models/targetState"
+import {TargetState, TargetsStates} from "src/models/targetState"
 
 class TargetData {
 
     /**
      *
      * @param {string} server
-     *
-     * @param {TargetState[]}jobs
+     * @param {TargetState|null} targetState
      * @param {NS} ns
      */
-    constructor(server, jobs, ns) {
+    constructor(server, targetState, ns) {
         this._server = server
+        this._targetState = targetState
         this._ns = ns
-        /**
-         * @type {TargetState[]}
-         * @private
-         */
-        this._jobs = []
-        this._allocatedGrowThreads = 0
-        this._allocatedWeakenThreads = 0
-        this._allocatedHackThreads = 0
         this._note = undefined
 
-        this._hacks = new Map()
     }
 
     /**
@@ -60,34 +51,11 @@ class TargetData {
         return this._ns.getServerSecurityLevel(this.server)
     }
 
-    get note() {
-        return this._note
-    }
-
-    set note(value) {
-        this._note = value
-    }
-
     /**
-     * @param {number} stealingPercent
-     * @return {{
-     *      hack: {amount: number; threads: number; duration: number},
-     *      weakenHack: {amount: number; threads: number; duration: number},
-     *      grow: {amount: number; threads: number; duration: number},
-     *      weakenGrow: {amount: number; threads: number; duration: number},
-     *      totalThreads:number;
-     *      pipelineLength:number;
-     *      expectedRevenue:number;
-     * }}
+     * @return {TargetState}
      */
-    getHackStats(stealingPercent = 0.5) {
-        const computed = this._hacks.get(stealingPercent)
-        if (computed) {
-            return computed
-        }
-        const n = this._getHackStats(stealingPercent)
-        this._hacks.set(stealingPercent, n)
-        return n
+    get targetState() {
+        return this._targetState
     }
 
     /**
@@ -155,140 +123,15 @@ class TargetData {
         }
     }
 
-    /**
-     *
-     * @returns {{
-     * server: string,
-     * threadsToWeaken: number,
-     * timeToWeaken: number,
-     * growthThreads: number,
-     * timeToGrow: number,
-     * growthThreadsRemaining: number,
-     * }|null}
-     */
-    getUpgradeStats() {
-        if (this.currentMoney === this.maxMoney && this.currentSecurity === this.minSecurity) {
-            return null
-        }
-
-        const ns = this._ns
-
-        let threadsToWeaken = 0
-        while (this.currentSecurity - ns.weakenAnalyze(threadsToWeaken + this.allocatedWeakenThreads) > this.minSecurity) {
-            threadsToWeaken++
-        }
-
-        const growthThreads = Math.ceil(ns.growthAnalyze(this.server, this.maxMoney / Math.max(this.currentMoney, 1)))
-
-        return {
-            server: this.server,
-            threadsToWeaken,
-            timeToWeaken: ns.getWeakenTime(this.server),
-            growthThreads: this.allocatedGrowThreads === 0
-                ? growthThreads
-                : 0,
-            timeToGrow: ns.getGrowTime(this.server),
-            growthThreadsRemaining: growthThreads,
-        }
-    }
-
-    /**
-     *
-     * @returns {TargetState[]}
-     */
-    get jobs() {
-        return this._jobs
-    }
-
-    /**
-     *
-     * @param {WorkJob[]} value
-     */
-    set jobs(value) {
-        this._jobs = value
-        /*this._jobs.sort((a, b) => {
-            if (a.end < b.end) {
-                return -1
-            } else if (a.end > b.end) {
-                return 1
-            } else {
-                return 0
-            }
-        })
-        this._allocatedGrowThreads = value.reduce((partial, a) => {
-            return partial + (a.action === "grow"
-                ? a.threads
-                : 0)
-        }, 0)
-        this._allocatedWeakenThreads = value.reduce((partial, a) => {
-            return partial + (a.action === "weaken"
-                ? a.threads
-                : 0)
-        }, 0)
-        this._allocatedHackThreads = value.reduce((partial, a) => {
-            return partial + (a.action === "hack"
-                ? a.threads
-                : 0)
-        }, 0)
-*/
-    }
-
-    /**
-     *
-     * @param {WorkJob[]} jobs
-     */
-    addJobs(jobs) {
-        this._jobs.push(...jobs)
-        this.jobs = (this._jobs)
-    }
-
-    get allocatedHackThreads() {
-        return this._allocatedHackThreads
-    }
-
-    get allocatedWeakenThreads() {
-        return this._allocatedWeakenThreads
-    }
-
-    get allocatedGrowThreads() {
-        return this._allocatedGrowThreads
-    }
-
-    get isBatching() {
-       /* const batches = this.jobs.length > 0 && this.jobs.length % 4 === 0
-        if (!batches) {
-            return false
-        }
-
-        const growJobs = this.jobs.reduce((partial, a) => {
-            return partial + (a.action === "grow"
-                ? 1
-                : 0)
-        }, 0)
-        const weakenJobs = this.jobs.reduce((partial, a) => {
-            return partial + (a.action === "weaken"
-                ? 1
-                : 0)
-        }, 0)
-        const hackJobs = this.jobs.reduce((partial, a) => {
-            return partial + (a.action === "hack"
-                ? 1
-                : 0)
-        }, 0)
-
-        return growJobs === hackJobs && growJobs === weakenJobs / 2 && (growJobs + hackJobs + weakenJobs) === this.jobs.length*/
-        return false
-    }
-
 }
 
 /**
  * @param {object} object
- * @param {WorkState} workJobs
+ * @param {TargetsStates} states
  * @param {NS} ns
  * @returns {TargetData | null}
  */
-function deserialize(object, workJobs, ns) {
+function deserialize(object, states, ns) {
     if (!object.name) {
         return null
     }
@@ -300,19 +143,17 @@ function deserialize(object, workJobs, ns) {
         return null
     }
 
-    const jobs = workJobs.jobs.filter((item) => {
-        return item.target === object.name
-    })
-    return new TargetData(object.name, jobs, ns)
+    const targetState = states.loadTargetStateOrDefault(object.name)
+    return new TargetData(object.name, targetState, ns)
 }
 
 /**
  * @param {NS} ns
- * @param {WorkState} workJobs
+ * @param {TargetsStates} states
  * @param {(...args: any[]) => void} lfn
  * @returns {TargetData[]}}
  */
-export function loadTargets(ns, workJobs, lfn) {
+export function loadTargets(ns, states, lfn) {
     /** @type {TargetData[]} */
     const resArray = []
     try {
@@ -324,7 +165,7 @@ export function loadTargets(ns, workJobs, lfn) {
 
         for (const serializedData of json) {
             try {
-                const d = deserialize(serializedData, workJobs, ns)
+                const d = deserialize(serializedData, states, ns)
                 if (d) {
                     resArray.push(d)
                 }

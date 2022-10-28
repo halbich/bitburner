@@ -1,3 +1,5 @@
+import {TargetStatesEnum} from "../utils/constants"
+
 export class TargetJobData {
     /**
      *
@@ -53,6 +55,14 @@ export class TargetState {
         this.batchLength = batchLength
         this.expectedRevenue = expectedRevenue
     }
+
+    get isBatching() {
+        return this.state === TargetStatesEnum.Batching
+    }
+
+    get isUpgrading() {
+        return this.state === TargetStatesEnum.Upgrading
+    }
 }
 
 export class TargetsStates {
@@ -63,7 +73,7 @@ export class TargetsStates {
      */
     constructor(ns, lfn) {
         /**
-         * @type {TargetState[]}
+         * @type {Map<string,TargetState>}
          */
         this.states = this.#loadJobState(ns, lfn)
 
@@ -72,22 +82,35 @@ export class TargetsStates {
     /**
      * @param {NS} ns
      * @param {(...args: any[]) => void} lfn
-     * @returns {TargetState[]}
+     * @returns {Map<string,TargetState>}
      */
     #loadJobState(ns, lfn) {
         try {
             const fileContent = ns.read(targetStatesFile)
             const json = JSON.parse(fileContent)
             if (!Array.isArray(json)) {
-                return []
+                return new Map()
             }
-            return json.map((item) => {
-                return new TargetState(item)
-            })
+
+            const result = new Map()
+            for (const data of json) {
+                const item = new TargetState(data)
+                result.set(item.server, item)
+            }
+            return result
         } catch (a) {
             lfn("!!! Error in loading jobState ", a)
-            return []
+            return new Map()
         }
+    }
+
+    /**
+     *
+     * @param {string} server
+     * @returns {TargetState| null}
+     */
+    loadTargetStateOrDefault(server) {
+        return this.states.get(server)
     }
 
     /**
@@ -96,11 +119,15 @@ export class TargetsStates {
      */
     async saveJobState(ns, lfn) {
         try {
-            await ns.write(targetStatesFile, JSON.stringify(this.states, null, 4), "w")
+            const statesArray = Array.from(this.states.values())
+            await ns.write(targetStatesFile, JSON.stringify(statesArray, null, 4), "w")
         } catch (a) {
             lfn("!!! Error in saving jobState ", a)
         }
     }
 }
 
-const targetStatesFile = "targetStates.txt"
+const targetStatesFile = "/data/targetStates.txt"
+
+
+

@@ -1,3 +1,5 @@
+import {ActionsEnum, PortAllocations} from "src/utils/constants"
+
 /** @param {NS} ns */
 export async function main(ns) {
 
@@ -46,32 +48,45 @@ export async function main(ns) {
     const dur0 = Date.now()
     ns.print(`${new Date().toLocaleTimeString()}. Doing ${action} on ${target}`)
     switch (action) {
-        case "weaken": {
+        case ActionsEnum.Weaken: {
             const value = await ns.weaken(target, {threads})
-            if (target === "n00dles") {
-                ns.tprint(`${action}, ${expectedAmount}, ${value}`)
-                ns.tprint(`${expectedDuration}, ${Date.now() - dur0}`)
-            }
+            await writeAction(ns, target, action, expectedAmount, value, expectedDuration, Date.now() - dur0)
             break
         }
-        case "grow": {
+        case ActionsEnum.Grow: {
             const value = await ns.grow(target, {threads})
-            if (target === "n00dles") {
-                ns.tprint(`${action}, ${expectedAmount}, ${value}`)
-                ns.tprint(`${expectedDuration}, ${Date.now() - dur0}`)
-            }
+            await writeAction(ns, target, action, expectedAmount, value, expectedDuration, Date.now() - dur0)
             break
         }
-        case "hack": {
+        case ActionsEnum.Hack: {
             const value = await ns.hack(target, {threads})
-            if (target === "n00dles") {
-                ns.tprint(`${action}, ${expectedAmount}, ${value}`)
-                ns.tprint(`${expectedDuration}, ${Date.now() - dur0}`)
-            }
+            await writeAction(ns, target, action, expectedAmount, value, expectedDuration, Date.now() - dur0)
             break
         }
         default: {
             ns.print("Invalid action!")
         }
     }
+}
+
+/**
+ *
+ * @param {NS} ns
+ * @param {string} server
+ * @param {string} action
+ * @param {number} expectedAmount
+ * @param {number} amount
+ * @param {number} expectedDuration
+ * @param {number} duration
+ * @returns {Promise<any>}
+ */
+async function writeAction(ns, server, action, expectedAmount, amount, expectedDuration, duration) {
+    return ns.writePort(PortAllocations.TargetState, JSON.stringify({
+        server,
+        action,
+        expectedAmount,
+        amount,
+        expectedDuration,
+        duration,
+    }))
 }

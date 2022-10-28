@@ -2,7 +2,7 @@ import {printTable} from "src/utils/table.js"
 import {formatMoney, progressBar} from "src/utils/utils.js"
 import {loadRunners} from "src/models/runnerData.js"
 import {loadTargets} from "src/models/targetData.js"
-import {WorkJobs, WorkJob} from "src/models/workJobs.js"
+import {TargetJobData, TargetState, TargetsStates} from "src/models/targetState.js"
 
 /** @param {NS} ns */
 export async function main(ns) {
@@ -21,7 +21,7 @@ export async function main(ns) {
         const start = Date.now()
         lfn(`Current iteration: ${new Date().toTimeString()}`)
 
-        const jobs = new WorkJobs(ns, lfn)
+        const states = new TargetsStates(ns, lfn)
         const runners = loadRunners(ns, lfn)
         const targets = loadTargets(ns, jobs, lfn)
 
@@ -34,9 +34,10 @@ export async function main(ns) {
         printTable(lfn, targets, getTargetStringData)
         await jobs.saveJobState(ns, lfn)
 
-        lfn(`Iteration done in ${Date.now() - start} ms`)
+        const length = Date.now() - start
+        lfn(`Iteration done in ${length} ms`)
         if (continuous) {
-            await ns.sleep(1000)
+            await ns.sleep(Math.max(20, iterationLength - length))
         }
     } while (continuous)
 }
@@ -45,7 +46,7 @@ export async function main(ns) {
  * @param {({server: string, threadsToWeaken: number, timeToWeaken: number, growthThreads: number, timeToGrow: number, growthThreadsRemaining: number}|null)[]} needFill
  * @param {RunnerData[]} availableRunners
  * @param {NS} ns
- * @param {WorkJobs} jobs
+ * @param {WorkState} jobs
  * @param {number} now
  */
 function tryFillWeaken(needFill, availableRunners, ns, jobs, now) {
@@ -62,7 +63,9 @@ function tryFillWeaken(needFill, availableRunners, ns, jobs, now) {
     })
     while (needWeaken.length) {
         const weaken = needWeaken.shift()
-        fillRunners(availableRunners, ns, jobs, now, {
+        fillRunners(availableRunners, ns, jobs, {
+            now,
+            allowSplit: true,
             threads: weaken.threadsToWeaken,
             target: weaken.server,
             action: "weaken",
@@ -77,7 +80,7 @@ function tryFillWeaken(needFill, availableRunners, ns, jobs, now) {
  * @param {({server: string, threadsToWeaken: number, timeToWeaken: number, growthThreads: number, timeToGrow: number, growthThreadsRemaining: number}|null)[]} needFill
  * @param {RunnerData[]} availableRunners
  * @param {NS} ns
- * @param {WorkJobs} jobs
+ * @param {WorkState} jobs
  * @param {number} now
  */
 function tryFillGrow(needFill, availableRunners, ns, jobs, now) {
@@ -94,7 +97,9 @@ function tryFillGrow(needFill, availableRunners, ns, jobs, now) {
     })
     while (needGrow.length) {
         const weaken = needGrow.shift()
-        fillRunners(availableRunners, ns, jobs, now, {
+        fillRunners(availableRunners, ns, jobs, {
+            now,
+            allowSplit: true,
             threads: weaken.growthThreads,
             target: weaken.server,
             action: "grow",
@@ -109,9 +114,10 @@ function tryFillGrow(needFill, availableRunners, ns, jobs, now) {
 /**
  * @param {RunnerData[]} availableRunners
  * @param {NS} ns
- * @param {WorkJobs} jobs
- * @param {number} now
+ * @param {WorkState} jobs
  * @param {{
+ * now: number;
+ * allowSplit: boolean;
  * threads:number;
  * target: string;
  * action: string;
@@ -122,10 +128,12 @@ function tryFillGrow(needFill, availableRunners, ns, jobs, now) {
  * }} jobParams
  * @param {TargetData | undefined} targetServer
  */
-function fillRunners(availableRunners, ns, jobs, now, jobParams,
+function fillRunners(availableRunners, ns, jobs, jobParams,
                      targetServer = undefined) {
 
     const {
+        now,
+        allowSplit,
         threads,
         target,
         action,
@@ -154,7 +162,7 @@ function fillRunners(availableRunners, ns, jobs, now, jobParams,
             })
             runWork(ns, runner, job, jobs, targetServer, amount, duration)
             remainingThreadsToFill -= job.threads
-        } else {
+        } else if (allowSplit) {
             const job = new WorkJob({
                 runner: runner.server,
                 target,
@@ -179,7 +187,7 @@ function fillRunners(availableRunners, ns, jobs, now, jobParams,
  * @param {NS} ns
  * @param {RunnerData[]} runners
  * @param {TargetData[]} targets
- * @param {WorkJobs} jobs
+ * @param {WorkState} jobs
  * @param {(...args: any[]) => void} lfn
  */
 function processJobs(ns, runners, targets, jobs, lfn) {
@@ -263,7 +271,9 @@ function processJobs(ns, runners, targets, jobs, lfn) {
         }
 
         const originalSize = target.jobs.length
-        fillRunners(availableRunners, ns, jobs, now, {
+        fillRunners(availableRunners, ns, jobs, {
+            now,
+            allowSplit: false,
             threads: hacks.hack.threads,
             amount: hacks.hack.amount,
             duration: hacks.hack.duration,
@@ -272,7 +282,9 @@ function processJobs(ns, runners, targets, jobs, lfn) {
             startOffset: times[0][0],
             endOffset: 4 * scriptOffset,
         }, target)
-        fillRunners(availableRunners, ns, jobs, now, {
+        fillRunners(availableRunners, ns, jobs, {
+            now,
+            allowSplit: false,
             threads: hacks.weakenHack.threads,
             amount: hacks.weakenHack.amount,
             duration: hacks.weakenHack.duration,
@@ -281,7 +293,9 @@ function processJobs(ns, runners, targets, jobs, lfn) {
             startOffset: times[1][0],
             endOffset: 3 * scriptOffset,
         }, target)
-        fillRunners(availableRunners, ns, jobs, now, {
+        fillRunners(availableRunners, ns, jobs, {
+            now,
+            allowSplit: false,
             threads: hacks.grow.threads,
             amount: hacks.grow.amount,
             duration: hacks.grow.duration,
@@ -290,7 +304,9 @@ function processJobs(ns, runners, targets, jobs, lfn) {
             startOffset: times[2][0],
             endOffset: 2 * scriptOffset,
         }, target)
-        fillRunners(availableRunners, ns, jobs, now, {
+        fillRunners(availableRunners, ns, jobs, {
+            now,
+            allowSplit: false,
             threads: hacks.weakenGrow.threads,
             amount: hacks.weakenGrow.amount,
             duration: hacks.weakenGrow.duration,
@@ -365,7 +381,7 @@ function computeBatch(target, lfn) {
  * @param {NS} ns
  * @param {RunnerData} runner
  * @param {WorkJob} job
- * @param {WorkJobs} jobs
+ * @param {WorkState} jobs
  * @param {TargetData| undefined} targetServer
  * @param {number|undefined} expectedAmount
  * @param {number|undefined} expectedDuration
@@ -409,7 +425,7 @@ function runWork(ns, runner, job, jobs, targetServer = undefined, expectedAmount
 
     }
 
-    const pid = ns.exec(hackScript, runner.server, job.threads, ...params);
+    const pid = ns.exec(hackScript, runner.server, job.threads, ...params)
     if (!pid) {
         return null
     }
@@ -540,3 +556,4 @@ const mutedFunctions = [
 
 const stealingPercent = 0.5
 const scriptOffset = 250
+const iterationLength = 1000

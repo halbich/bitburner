@@ -2,38 +2,36 @@ import {printTable} from "src/utils/table.js"
 import {formatMoney, progressBar} from "src/utils/utils.js"
 import {loadRunners} from "src/models/runnerData.js"
 import {loadTargets} from "src/models/targetData.js"
-import {WorkState, WorkJob} from "src/models/workJobs.js"
+
+class WorkerJobState{
+
+}
 
 /** @param {NS} ns */
 export async function main(ns) {
-    const ar = ns.args[0] ?? ""
-    const continuous = ar.includes("c")
-    const lfn = continuous
-        ? ns.print
-        : ns.tprint
+    const lfn = ns.print
 
     for (const muted of mutedFunctions) {
         ns.disableLog(muted)
     }
+    const port = ns.getPortHandle(notificationPort)
 
-    do {
+    while (true) {
         ns.clearLog()
         const start = Date.now()
         lfn(`Current iteration: ${new Date().toTimeString()}`)
 
-        const jobs = new WorkState(ns, lfn)
-        const runners = loadRunners(ns, lfn)
-        const targets = loadTargets(ns, jobs, lfn)
+        if (!port.empty()) {
 
-        printTable(lfn, runners, getRunnerStringData)
-        printTable(lfn, targets, getTargetStringData)
+            /* const targets = loadTargets(ns, jobs, lfn)
 
+           /*printTable(lfn, runners, getRunnerStringData)
+             printTable(lfn, targets, getTargetStringData)*/
+        }
         lfn(`Iteration done in ${Date.now() - start} ms`)
 
-        if (continuous) {
-            await ns.sleep(1000)
-        }
-    } while (continuous)
+        await ns.sleep(20)
+    }
 }
 
 /**
@@ -118,18 +116,6 @@ function toMinutes(sec) {
 }
 
 const mutedFunctions = [
-    "getServerRequiredHackingLevel",
-    "getHackingLevel",
-    "scan",
-    "getServerMaxRam",
-    "getServerMaxMoney",
-    "scp",
-    "sleep",
-    "getServerMoneyAvailable",
-    "getServerSecurityLevel",
-    "getServerMinSecurityLevel",
-    "exec",
-    "getServerUsedRam",
 ]
 
-const stealingPercent = 0.5
+const notificationPort = 1

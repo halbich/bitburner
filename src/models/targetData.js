@@ -1,4 +1,4 @@
-import {WorkJobs, WorkJob} from "src/models/workJobs"
+import {TargetState} from "src/models/targetState"
 
 class TargetData {
 
@@ -6,14 +6,14 @@ class TargetData {
      *
      * @param {string} server
      *
-     * @param {WorkJob[]}jobs
+     * @param {TargetState[]}jobs
      * @param {NS} ns
      */
     constructor(server, jobs, ns) {
         this._server = server
         this._ns = ns
         /**
-         * @type {WorkJob[]}
+         * @type {TargetState[]}
          * @private
          */
         this._jobs = []
@@ -22,7 +22,6 @@ class TargetData {
         this._allocatedHackThreads = 0
         this._note = undefined
 
-        this.jobs = jobs
         this._hacks = new Map()
     }
 
@@ -147,7 +146,7 @@ class TargetData {
             weakenGrow: {
                 amount: growthSecurityIncrease,
                 threads: threadsToWeakenGrow,
-                duration: weakenTime
+                duration: weakenTime,
 
             },
             totalThreads: hackThreads + threadsToWeakenHack + growthThreads + threadsToWeakenGrow,
@@ -195,7 +194,7 @@ class TargetData {
 
     /**
      *
-     * @returns {WorkJob[]}
+     * @returns {TargetState[]}
      */
     get jobs() {
         return this._jobs
@@ -207,7 +206,7 @@ class TargetData {
      */
     set jobs(value) {
         this._jobs = value
-        this._jobs.sort((a, b) => {
+        /*this._jobs.sort((a, b) => {
             if (a.end < b.end) {
                 return -1
             } else if (a.end > b.end) {
@@ -231,7 +230,7 @@ class TargetData {
                 ? a.threads
                 : 0)
         }, 0)
-
+*/
     }
 
     /**
@@ -256,7 +255,7 @@ class TargetData {
     }
 
     get isBatching() {
-        const batches = this.jobs.length > 0 && this.jobs.length % 4 === 0
+       /* const batches = this.jobs.length > 0 && this.jobs.length % 4 === 0
         if (!batches) {
             return false
         }
@@ -277,14 +276,15 @@ class TargetData {
                 : 0)
         }, 0)
 
-        return growJobs === hackJobs && growJobs === weakenJobs / 2 && (growJobs + hackJobs + weakenJobs) === this.jobs.length
+        return growJobs === hackJobs && growJobs === weakenJobs / 2 && (growJobs + hackJobs + weakenJobs) === this.jobs.length*/
+        return false
     }
 
 }
 
 /**
  * @param {object} object
- * @param {WorkJobs} workJobs
+ * @param {WorkState} workJobs
  * @param {NS} ns
  * @returns {TargetData | null}
  */
@@ -296,6 +296,10 @@ function deserialize(object, workJobs, ns) {
         return null
     }
 
+    if (object.name !== "n00dles") {
+        return null
+    }
+
     const jobs = workJobs.jobs.filter((item) => {
         return item.target === object.name
     })
@@ -304,7 +308,7 @@ function deserialize(object, workJobs, ns) {
 
 /**
  * @param {NS} ns
- * @param {WorkJobs} workJobs
+ * @param {WorkState} workJobs
  * @param {(...args: any[]) => void} lfn
  * @returns {TargetData[]}}
  */

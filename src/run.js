@@ -42,25 +42,25 @@ export async function main(ns) {
         action,
         target,
         threads,
-        expectedAmount,
-        expectedDuration,
+        amount,
+        duration,
     } = flags
     const dur0 = Date.now()
     ns.print(`${new Date().toLocaleTimeString()}. Doing ${action} on ${target}`)
     switch (action) {
         case ActionsEnum.Weaken: {
             const value = await ns.weaken(target, {threads})
-            await writeAction(ns, target, action, threads, flags.delay, expectedAmount, value, expectedDuration, Date.now() - dur0)
+            await writeAction(ns, target, action, threads, flags.delay, amount, value, duration, Date.now() - dur0)
             break
         }
         case ActionsEnum.Grow: {
             const value = await ns.grow(target, {threads})
-            await writeAction(ns, target, action, threads, flags.delay, expectedAmount, value, expectedDuration, Date.now() - dur0)
+            await writeAction(ns, target, action, threads, flags.delay, amount, value, duration, Date.now() - dur0)
             break
         }
         case ActionsEnum.Hack: {
             const value = await ns.hack(target, {threads})
-            await writeAction(ns, target, action, threads, flags.delay, expectedAmount, value, expectedDuration, Date.now() - dur0)
+            await writeAction(ns, target, action, threads, flags.delay, amount, value, duration, Date.now() - dur0)
             break
         }
         default: {

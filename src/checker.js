@@ -115,7 +115,6 @@ function getUpdateProgressBar(max, current, size) {
     }
 }
 
-
 const mutedFunctions = [
     "getServerRequiredHackingLevel",
     "getHackingLevel",

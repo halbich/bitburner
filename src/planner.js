@@ -3,7 +3,7 @@ import {formatMoney, progressBar} from "src/utils/utils.js"
 import {loadRunners} from "src/models/runnerData.js"
 import {loadTargets} from "src/models/targetData.js"
 import {initServer, runJob, TargetsStates, TargetStatesEnum} from "src/models/targetState.js"
-import {ActionsEnum} from "src/utils/constants"
+import {ActionsEnum, Files} from "src/utils/constants"
 
 /** @param {NS} ns */
 export async function main(ns) {
@@ -79,8 +79,8 @@ function fillRunners(availableRunners, ns, jobParams) {
                 target,
                 action,
                 delay,
-                expectedAmount: amount,
-                expectedDuration: duration,
+                amount,
+                duration,
             })
             remainingThreadsToFill -= remainingThreadsToFill
         } else if (allowSplit) {
@@ -89,8 +89,8 @@ function fillRunners(availableRunners, ns, jobParams) {
                 target,
                 action,
                 delay,
-                expectedAmount: amount,
-                expectedDuration: duration,
+                amount,
+                duration,
             })
             remainingThreadsToFill -= runner.threadsAvailable
         }
@@ -256,12 +256,13 @@ function processJobs(ns, runners, targets, lfn) {
  *     target: string;
  *     action: string;
  *     delay: number|undefined;
- *     expectedAmount: number|undefined;
- *     expectedDuration: number | undefined;
+ *     amount: number|undefined;
+ *     duration: number | undefined;
  * }} job
  */
 function runWork(ns, runner, job) {
-
+    ns.tprint(job)
+    ns.tprint(runner.server)
     if (!job.threads || job.threads < 1) {
         return
     }
@@ -282,23 +283,23 @@ function runWork(ns, runner, job) {
         ])
     }
 
-    if (job.expectedAmount) {
+    if (job.amount) {
         params.push(...[
-            "--expectedAmount",
-            job.expectedAmount,
+            "--amount",
+            job.amount,
         ])
 
     }
 
-    if (job.expectedDuration) {
+    if (job.duration) {
         params.push(...[
-            "--expectedDuration",
-            job.expectedDuration,
+            "--duration",
+            job.duration,
         ])
 
     }
 
-    if (ns.exec(hackScript, runner.server, job.threads, ...params)) {
+    if (ns.exec(Files.HackScript, runner.server, job.threads, ...params)) {
         runner.reserveThreads(job.threads)
         runJob(ns, job.target, job.action)
     }
@@ -382,8 +383,6 @@ function getUpdateProgressBar(max, current, size) {
 
     }
 }
-
-const hackScript = "/src/run.js"
 
 const mutedFunctions = [
     "getServerRequiredHackingLevel",

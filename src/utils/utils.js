@@ -3,7 +3,7 @@
  * @returns {number}
  */
 export function getRunScriptSize() {
-    return 2.0;
+    return 2.0
 }
 
 const format = new Intl.NumberFormat("en-US", {

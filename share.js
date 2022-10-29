@@ -1,4 +1,6 @@
 /** @param {NS} ns **/
+import {Files} from "src/utils/constants"
+
 export async function main(ns) {
     const flags = ns.flags([
         [
@@ -31,7 +33,7 @@ export async function main(ns) {
         }
 
         for (const srv of Array.from(serversAll)) {
-            ns.scriptKill(script, srv)
+            ns.scriptKill(Files.Share, srv)
         }
         return
     }
@@ -41,7 +43,7 @@ export async function main(ns) {
     if (!flags.share) {
         tryShare(ns, "home")
         for (const nei of ns.scan(flags.host)) {
-            ns.exec(script, nei, 1, "--share", false, "--host", nei)
+            ns.exec(Files.Share, nei, 1, "--share", false, "--host", nei)
         }
     } else {
         while (true) {
@@ -51,10 +53,9 @@ export async function main(ns) {
 }
 
 function tryShare(ns, host) {
-    const available = Math.floor((ns.getServerMaxRam(host)  - ns.getServerUsedRam(host)) / 7.10)
+    const available = Math.floor((ns.getServerMaxRam(host) - ns.getServerUsedRam(host)) / 7.10)
     if (available > 0) {
-        ns.exec(script, host, available, "--share", true, "--host", host)
+        ns.exec(Files.Share, host, available, "--share", true, "--host", host)
     }
 }
 
-const script = "share.js"

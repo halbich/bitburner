@@ -1,4 +1,4 @@
-import {ActionsEnum, PortAllocations} from "src/utils/constants"
+import {ActionsEnum, Files, PortAllocations} from "src/utils/constants"
 
 export class TargetJobData {
     /**
@@ -82,7 +82,7 @@ export class TargetsStates {
      */
     #loadJobState(ns, lfn) {
         try {
-            const fileContent = ns.read(targetStatesFile)
+            const fileContent = ns.read(Files.TargetStates)
             const json = JSON.parse(fileContent)
             if (!Array.isArray(json)) {
                 return new Map()
@@ -219,7 +219,7 @@ export class TargetsStates {
     async saveJobState(ns, lfn) {
         try {
             const statesArray = Array.from(this.states.values())
-            await ns.write(targetStatesFile, JSON.stringify(statesArray, null, 4), "w")
+            await ns.write(Files.TargetStates, JSON.stringify(statesArray, null, 4), "w")
         } catch (a) {
             lfn("!!! Error in saving jobState ", a)
         }
@@ -239,6 +239,7 @@ export class TargetsStates {
         const pipelineLength = Math.max(state.hack.duration, state.weakenHack.duration, state.grow.duration, state.weakenGrow.duration) - Math.min(state.hack.duration, state.weakenHack.duration, state.grow.duration, state.weakenGrow.duration)
         state.expectedRevenue = state.hack.amount / pipelineLength
         state.state = TargetStatesEnum.Batching
+        state.totalThreads = state.hack.threads + state.weakenHack.threads + state.grow.threads + state.weakenGrow.threads
     }
 
     /**
@@ -273,8 +274,6 @@ export class TargetsStates {
         return times
     }
 }
-
-const targetStatesFile = "/data/targetStates.txt"
 
 const MessagesEnum = {
     Init: "init:",

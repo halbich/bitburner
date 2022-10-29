@@ -96,11 +96,14 @@ async function exploreHost(ns, index, hostData, exploreParams, lfn) {
     }
     for (const script of copyScripts) {
         if (exploreParams.restartScripts || !ns.fileExists(script, server)) {
+            ns.tprint(`Kill ${script} on ${server}`)
             ns.scriptKill(script, server)
 
             if (ns.fileExists(script, server)) {
+                ns.tprint(`Remove ${script} on ${server}`)
                 ns.rm(script, server)
             }
+            ns.tprint(`Copy ${script} on ${server}`)
             await ns.scp(script, server)
         }
     }

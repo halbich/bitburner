@@ -1,3 +1,5 @@
+import {Files} from "src/utils/constants"
+
 class ServerData {
 
     /**
@@ -125,11 +127,11 @@ function loadIndex(ns, data) {
 function loadServerData(ns, lfn) {
     const resArray = []
     try {
-        if (!ns.fileExists(db)) {
+        if (!ns.fileExists(Files.Db)) {
             return loadIndex(ns, resArray)
         }
 
-        const fileContent = ns.read(db)
+        const fileContent = ns.read(Files.Db)
         const json = JSON.parse(fileContent)
         if (!Array.isArray(json)) {
             return loadIndex(ns, resArray)
@@ -166,7 +168,7 @@ async function saveServerData(ns, index, lfn) {
         }
 
         const json = JSON.stringify(serialized, null, 4)
-        await ns.write(db, json, "w")
+        await ns.write(Files.Db, json, "w")
     } catch (a) {
         lfn("!!! Error in saving", a)
     }
@@ -181,6 +183,5 @@ const savedProperties = [
     "scriptingAvailable",
     "parent",
 ]
-const db = "/data/db.txt"
 
 export {ServerData, loadServerData, saveServerData}

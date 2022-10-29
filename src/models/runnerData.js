@@ -1,4 +1,5 @@
 import {getRunScriptSize} from "src/utils/utils.js"
+import {Files} from "src/utils/constants"
 
 class RunnerData {
     /**
@@ -73,7 +74,7 @@ export function loadRunners(ns, lfn) {
     /** @type {RunnerData[]} */
     const resArray = []
     try {
-        const fileContent = ns.read(db)
+        const fileContent = ns.read(Files.Db)
         const json = JSON.parse(fileContent)
         if (!Array.isArray(json)) {
             return resArray
@@ -106,7 +107,6 @@ export function loadRunners(ns, lfn) {
     }
 }
 
-const db = "/data/db.txt"
 
 
 

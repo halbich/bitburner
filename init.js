@@ -1,23 +1,25 @@
 /** @param {NS} ns */
+import {Files} from "src/utils/constants"
+
 export async function main(ns) {
-    ns.write(db, "[]")
 
     let target = home
 
-    ns.scriptKill(planner, target)
-    ns.scriptKill(autoScaler, target)
-    ns.scriptKill(systemScript, target)
+    ns.scriptKill(Files.Planner, target)
+    ns.scriptKill(Files.Optimizer, target)
+    ns.scriptKill(Files.ServerExplorer, target)
+    ns.scriptKill(Files.HacknetScaler, target)
+
+    ns.write(Files.Db, "[]")
+    ns.write(Files.TargetStates, "[]")
 
     ns.tprint(`Running scripts at ${target}`)
 
-    ns.exec(systemScript, target, 1, "c")
-    ns.exec(planner, target, 1, "c")
-    ns.exec(autoScaler, target)
+    ns.exec(Files.HacknetScaler, target)
+    ns.exec(Files.ServerExplorer, target, 1, "c")
+    ns.exec(Files.Optimizer, target, 1)
+    ns.exec(Files.Planner, target, 1, "c")
 
 }
 
-const planner = "/src/planner.js"
-const autoScaler = "/src/hacknetScaler.js"
-const systemScript = "/src/serverExplorer.js"
-const db = "/data/db.txt"
 const home = "home"

@@ -1,4 +1,5 @@
 import {TargetState, TargetsStates} from "src/models/targetState"
+import {Files} from "src/utils/constants"
 
 class TargetData {
 
@@ -58,70 +59,6 @@ class TargetData {
         return this._targetState
     }
 
-    /**
-     * @param {number} stealingPercent
-     * @return {{
-     *      hack: {amount: number; threads: number; duration: number},
-     *      weakenHack: {amount: number; threads: number; duration: number},
-     *      grow: {amount: number; threads: number; duration: number},
-     *      weakenGrow: {amount: number; threads: number; duration: number},
-     *      totalThreads:number;
-     *      pipelineLength:number;
-     *      expectedRevenue:number;
-     * }}
-     */
-    _getHackStats(stealingPercent = 0.5) {
-        const ns = this._ns
-        const hackAmount = this.maxMoney * stealingPercent
-        const hackThreads = Math.floor(ns.hackAnalyzeThreads(this.server, hackAmount))
-        const hackSecurityIncrease = ns.hackAnalyzeSecurity(hackThreads, this.server)
-
-        let threadsToWeakenHack = 0
-        while (ns.weakenAnalyze(threadsToWeakenHack) < hackSecurityIncrease) {
-            threadsToWeakenHack++
-        }
-
-        const growthThreads = Math.ceil(ns.growthAnalyze(this.server, 1.0 / stealingPercent))
-
-        const growthSecurityIncrease = 2 * 0.002 * growthThreads // ns.growthAnalyzeSecurity(growthThreads, this.server, 1)
-
-        let threadsToWeakenGrow = 0
-        while (ns.weakenAnalyze(threadsToWeakenGrow) < growthSecurityIncrease) {
-            threadsToWeakenGrow++
-        }
-
-        const hackTime = Math.ceil(ns.getHackTime(this.server))
-        const growTime = Math.ceil(ns.getGrowTime(this.server))
-        const weakenTime = Math.ceil(ns.getWeakenTime(this.server))
-        const pipelineLength = Math.max(hackTime, growTime, weakenTime)
-
-        return {
-            hack: {
-                amount: hackAmount,
-                threads: hackThreads,
-                duration: hackTime,
-            },
-            weakenHack: {
-                amount: hackSecurityIncrease,
-                threads: threadsToWeakenHack,
-                duration: weakenTime,
-            },
-            grow: {
-                amount: hackAmount,
-                threads: growthThreads,
-                duration: growTime,
-            },
-            weakenGrow: {
-                amount: growthSecurityIncrease,
-                threads: threadsToWeakenGrow,
-                duration: weakenTime,
-
-            },
-            totalThreads: hackThreads + threadsToWeakenHack + growthThreads + threadsToWeakenGrow,
-            pipelineLength,
-            expectedRevenue: Math.round(hackAmount / pipelineLength),
-        }
-    }
 }
 
 /**
@@ -135,10 +72,6 @@ function deserialize(object, states, ns) {
         return null
     }
     if (!ns.getServerMaxMoney(object.name) || !object.hasAdmin) {
-        return null
-    }
-
-    if (object.name !== "n00dles") {
         return null
     }
 
@@ -156,7 +89,7 @@ export function loadTargets(ns, states, lfn) {
     /** @type {TargetData[]} */
     const resArray = []
     try {
-        const fileContent = ns.read(db)
+        const fileContent = ns.read(Files.Db)
         const json = JSON.parse(fileContent)
         if (!Array.isArray(json)) {
             return resArray
@@ -188,5 +121,3 @@ export function loadTargets(ns, states, lfn) {
         return resArray
     }
 }
-
-const db = "/data/db.txt"

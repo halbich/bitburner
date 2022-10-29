@@ -1,4 +1,4 @@
-import {TargetStatesEnum} from "../utils/constants"
+import {ActionsEnum, PortAllocations} from "src/utils/constants"
 
 export class TargetJobData {
     /**
@@ -23,6 +23,7 @@ export class TargetState {
      *
      * @param {string} server
      * @param {string} state
+     * @param {boolean} isRunning
      * @param {number} end
      * @param {TargetJobData} hack
      * @param {TargetJobData} weakenHack
@@ -35,6 +36,7 @@ export class TargetState {
     constructor({
                     server,
                     state,
+                    isRunning,
                     end,
                     hack,
                     weakenHack,
@@ -46,6 +48,7 @@ export class TargetState {
                 }) {
         this.server = server
         this.state = state
+        this.isRunning = isRunning
         this.end = end
         this.hack = hack
         this.weakenHack = weakenHack
@@ -54,14 +57,6 @@ export class TargetState {
         this.totalThreads = totalThreads
         this.batchLength = batchLength
         this.expectedRevenue = expectedRevenue
-    }
-
-    get isBatching() {
-        return this.state === TargetStatesEnum.Batching
-    }
-
-    get isUpgrading() {
-        return this.state === TargetStatesEnum.Upgrading
     }
 }
 
@@ -114,6 +109,64 @@ export class TargetsStates {
     }
 
     /**
+     *
+     * @param {string} message
+     * @param {(...args: any[]) => void} lfn
+     */
+    processStateMessage(message, lfn) {
+        if (message.startsWith(MessagesEnum.Init)) {
+            const name = message.substring(MessagesEnum.Init.length)
+            lfn(name)
+            const newState = new TargetState({
+                server: name,
+                state: TargetStatesEnum.Init,
+            })
+            this.states.set(newState.server, newState)
+        } else if (message.startsWith(MessagesEnum.Running)) {
+            const data = message.substring(MessagesEnum.Running.length).split(";")
+            lfn(data)
+            const state = this.states.get(data[0])
+            if (!state) {
+                return
+            }
+            switch (state.state) {
+                case TargetStatesEnum.Init: {
+                    state.isRunning = true
+                    if(data[1] === ActionsEnum.Hack) {
+                        state.state = TargetStatesEnum.PreparingHack
+                    }
+                    break
+                }
+            }
+        }
+    }
+
+    /**
+     * @param {{
+     * server: string;
+     * action: string;
+     * expectedAmount: number;
+     * amount: number;
+     * expectedDuration: number;
+     * duration: number;
+     * }} data
+     * @param {(...args: any[]) => void} lfn
+     */
+    processJobMessage(data, lfn) {
+        lfn(data);
+        const state = this.states.get(data.server)
+        if (!state) {
+            return
+        }
+        switch (state.state) {
+            case TargetStatesEnum.Init: {
+                state.isRunning = false
+                break
+            }
+        }
+    }
+
+    /**
      * @param {NS} ns
      * @param {(...args: any[]) => void} lfn
      */
@@ -129,5 +182,46 @@ export class TargetsStates {
 
 const targetStatesFile = "/data/targetStates.txt"
 
+const MessagesEnum = {
+    Init: "init:",
+    Running: "running:",
+}
 
+export const TargetStatesEnum = {
+    Init: "init",
+    Batching: "batching",
+    PreparingHack: "preparingHack",
+    PreparingHackWeaken: "preparingHackWeaken",
+    PreparingGrow: "preparingGrow",
+    PreparingGrowWeaken: "preparingGrowWeaken",
+}
+
+/**
+ * @param {NS} ns
+ * @param {string} server
+ */
+export function initServer(ns, server) {
+    ns.writePort(PortAllocations.TargetState, MessagesEnum.Init + server).then()
+}
+
+/**
+ * @param {NS} ns
+ * @param {string} server
+ * @param {string} job
+ */
+export function runJob(ns, server, job) {
+    ns.writePort(PortAllocations.TargetState, MessagesEnum.Running + server + ";" + job).then()
+}
+
+/**
+ * @param {NS} ns
+ * @param {TargetState} state
+ * @parem {string} action
+ */
+export function changeState(ns, state, action) {
+    switch (state.state) {
+
+    }
+    ns.writePort(PortAllocations.TargetState, "init:" + server).then()
+}
 

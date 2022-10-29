@@ -1,5 +1,5 @@
-import {TargetsStates, TargetState} from "src/models/targetState"
-import {PortAllocations} from "./utils/constants"
+import {TargetsStates} from "src/models/targetState"
+import {PortAllocations} from "src/utils/constants"
 
 /** @param {NS} ns */
 export async function main(ns) {
@@ -8,7 +8,7 @@ export async function main(ns) {
     for (const muted of mutedFunctions) {
         ns.disableLog(muted)
     }
-    const port = ns.getPortHandle(notificationPort)
+    const port = ns.getPortHandle(PortAllocations.TargetState)
     const states = new TargetsStates(ns, lfn)
 
     while (true) {
@@ -19,18 +19,13 @@ export async function main(ns) {
         const wasEmpty = port.empty()
         while (!port.empty()) {
 
-            const msg = port.read()
+            const msg = port.read().toString()
             ns.tprint("msg: " + msg)
-            if (msg.startsWith("init:")) {
-                const name = msg.substring(5)
-                ns.tprint(name)
-                const newState = new TargetState({
-                    server: name,
-                    state: "init",
-                })
-                states.states.set(newState.server, newState)
+            if (msg.startsWith("{")) {
+                states.processJobMessage(JSON.parse(msg), ns.tprint)
+            } else {
+                states.processStateMessage(msg, ns.tprint)
             }
-
         }
 
         if (!wasEmpty) {
@@ -45,24 +40,5 @@ export async function main(ns) {
 const mutedFunctions = []
 
 
-/**
- * @param {NS} ns
- * @param {string} server
- */
-export function initServer(ns, server) {
-    ns.writePort(PortAllocations.TargetState, "init:" + server).then()
-}
-
-/**
- * @param {NS} ns
- * @param {TargetState} state
- * @parem {string} action
- */
-export function changeState(ns, state, action) {
-    switch (state.state) {
-
-    }
-    ns.writePort(notificationPort, "init:" + server).then()
-}
 
 

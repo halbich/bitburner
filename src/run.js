@@ -55,7 +55,8 @@ export async function main(ns) {
         }
         case ActionsEnum.Grow: {
             const value = await ns.grow(target, {threads})
-            await writeAction(ns, target, action, expectedAmount, value, expectedDuration, Date.now() - dur0)
+            const r = await writeAction(ns, target, action, expectedAmount, value, expectedDuration, Date.now() - dur0)
+            ns.tprint("Run: " + r)
             break
         }
         case ActionsEnum.Hack: {

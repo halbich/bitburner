@@ -122,7 +122,6 @@ class TargetData {
             expectedRevenue: Math.round(hackAmount / pipelineLength),
         }
     }
-
 }
 
 /**

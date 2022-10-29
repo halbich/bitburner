@@ -91,13 +91,18 @@ async function exploreHost(ns, index, hostData, exploreParams, lfn) {
         return
     }
 
-    if (exploreParams.restartScripts || !ns.fileExists(moneyScript, server)) {
-        ns.scriptKill(moneyScript, server)
+    if (server === "home") {
+        return
+    }
+    for (const script of copyScripts) {
+        if (exploreParams.restartScripts || !ns.fileExists(script, server)) {
+            ns.scriptKill(script, server)
 
-        if (server !== "home" && ns.fileExists(moneyScript, server)) {
-            ns.rm(moneyScript, server)
+            if (ns.fileExists(script, server)) {
+                ns.rm(script, server)
+            }
+            await ns.scp(script, server)
         }
-        await ns.scp(moneyScript, server)
     }
 
 }
@@ -155,8 +160,10 @@ const mutedFunctions = [
     "relaysmtp",
     "httpworm",
     "sqlinject",
-    "getServerNumPortsRequired"
+    "getServerNumPortsRequired",
 ]
-
-const moneyScript = "/src/run.js"
+const copyScripts = [
+    "/src/run.js",
+    "/src/utils/constants.js",
+]
 const moneyScriptRam = 2 // getScriptRam returned null instead of 2;

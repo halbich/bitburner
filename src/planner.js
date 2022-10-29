@@ -2,9 +2,8 @@ import {printTable} from "src/utils/table.js"
 import {formatMoney, progressBar} from "src/utils/utils.js"
 import {loadRunners} from "src/models/runnerData.js"
 import {loadTargets} from "src/models/targetData.js"
-import {TargetsStates} from "src/models/targetState.js"
-import {initServer} from "src/optimizer"
-import {ActionsEnum, TargetStatesEnum} from "./utils/constants"
+import {initServer, runJob, TargetsStates, TargetStatesEnum} from "src/models/targetState.js"
+import {ActionsEnum} from "src/utils/constants"
 
 /** @param {NS} ns */
 export async function main(ns) {
@@ -17,7 +16,6 @@ export async function main(ns) {
     for (const muted of mutedFunctions) {
         ns.disableLog(muted)
     }
-
     do {
         ns.clearLog()
         const start = Date.now()
@@ -211,8 +209,10 @@ function processJobs(ns, runners, targets, lfn) {
                 batchingTargets.push(item)
                 break
             }
-            case TargetStatesEnum.Init: {
-                initTargets.push(item)
+            default: {
+                if (!state.isRunning) {
+                    initTargets.push(item)
+                }
                 break
             }
 
@@ -222,7 +222,6 @@ function processJobs(ns, runners, targets, lfn) {
     let remainingAvailable = totalAvailable
     while (initTargets.length && remainingAvailable > 0) {
         const target = initTargets.shift()
-        lfn(target)
         if (target.currentSecurity > target.minSecurity) {
             let threadsToWeakenGrow = 0
             while (target.currentSecurity - ns.weakenAnalyze(threadsToWeakenGrow) > target.minSecurity) {
@@ -235,6 +234,26 @@ function processJobs(ns, runners, targets, lfn) {
                 action: ActionsEnum.Weaken,
                 expectedAmount: ns.weakenAnalyze(threadsToWeakenGrow),
                 expectedDuration: ns.getWeakenTime(target.server),
+            })
+        } else if (target.currentMoney < target.maxMoney) {
+            let threadsToGrow = Math.ceil(ns.growthAnalyze(target.server, target.maxMoney / Math.max(1, target.currentMoney)))
+            fillRunners(availableRunners, ns, {
+                allowSplit: true,
+                threads: threadsToGrow,
+                target: target.server,
+                action: ActionsEnum.Grow,
+                expectedAmount: target.maxMoney - target.currentMoney,
+                expectedDuration: ns.getGrowTime(target.server),
+            })
+        } else {
+            let threadsToHack = Math.floor(ns.hackAnalyzeThreads(target.server, target.maxMoney * 0.5))
+            fillRunners(availableRunners, ns, {
+                allowSplit: true,
+                threads: threadsToHack,
+                target: target.server,
+                action: ActionsEnum.Hack,
+                expectedAmount: target.maxMoney * 0.5,
+                expectedDuration: ns.getHackTime(target.server),
             })
         }
     }
@@ -397,7 +416,7 @@ function runWork(ns, runner, job) {
 
     if (ns.exec(hackScript, runner.server, job.threads, ...params)) {
         runner.reserveThreads(job.threads)
-
+        runJob(ns, job.target, job.action)
     }
 }
 

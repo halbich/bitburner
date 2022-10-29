@@ -20,7 +20,6 @@ export async function main(ns) {
         while (!port.empty()) {
 
             const msg = port.read().toString()
-            ns.tprint("msg: " + msg)
             if (msg.startsWith("{")) {
                 states.processJobMessage(JSON.parse(msg), ns.tprint)
             } else {

@@ -2,7 +2,8 @@ import {printTable} from "src/utils/table.js"
 import {formatMoney, progressBar} from "src/utils/utils.js"
 import {loadRunners} from "src/models/runnerData.js"
 import {loadTargets} from "src/models/targetData.js"
-import {WorkState, WorkJob} from "src/models/workJobs.js"
+import {initServer, runJob, TargetsStates, TargetStatesEnum} from "src/models/targetState.js"
+import {ActionsEnum} from "src/utils/constants"
 
 /** @param {NS} ns */
 export async function main(ns) {
@@ -15,23 +16,22 @@ export async function main(ns) {
     for (const muted of mutedFunctions) {
         ns.disableLog(muted)
     }
-
     do {
         ns.clearLog()
         const start = Date.now()
         lfn(`Current iteration: ${new Date().toTimeString()}`)
 
-        const jobs = new WorkState(ns, lfn)
+        const states = new TargetsStates(ns, lfn)
         const runners = loadRunners(ns, lfn)
-        const targets = loadTargets(ns, jobs, lfn)
+        const targets = loadTargets(ns, states, lfn)
 
-        printTable(lfn, runners, getRunnerStringData)
+        //printTable(lfn, runners, getRunnerStringData)
         printTable(lfn, targets, getTargetStringData)
 
-        lfn(`Iteration done in ${Date.now() - start} ms`)
-
+        const length = Date.now() - start
+        lfn(`Iteration done in ${length} ms`)
         if (continuous) {
-            await ns.sleep(1000)
+            await ns.sleep(Math.max(20, iterationLength - length))
         }
     } while (continuous)
 }
@@ -67,30 +67,8 @@ function getTargetStringData(target) {
             "Server",
             "Money",
             "Security",
-            "Actions",
+            "State",
         ]
-    }
-    const jobs = [...target.jobs]
-    jobs.sort((a, b) => {
-        if (a.end < b.end) {
-            return -1
-        } else if (a.end > b.end) {
-            return 1
-        } else {
-            return 0
-        }
-    })
-    const jobsStr = []
-
-    if (jobs.length > 0) {
-
-        jobsStr.push(jobs[0].action)
-        jobsStr.push(jobs[0].end - Date.now())
-
-        for (let i = 1; i < jobs.length; i++) {
-            jobsStr.push(jobs[i].action)
-            jobsStr.push(jobs[i].end - jobs[i - 1].end)
-        }
     }
 
     return [
@@ -107,7 +85,10 @@ function getTargetStringData(target) {
             current: target.currentSecurity,
             size: 5,
         }),
-        `${jobsStr.join(", ")}`,
+        target.targetState
+            ? target.targetState.state
+            : "",
+
     ]
 }
 
@@ -116,6 +97,24 @@ function toMinutes(sec) {
     const seconds = sec % 60.0
     return `${minutes}:${seconds.toString().padStart(2, "0")}`
 }
+
+function getUpdateProgressBar(max, current, size) {
+    return (server, lfn) => {
+        if (server == null) {
+            return null
+        }
+        return [
+            progressBar({
+                min: 0,
+                max,
+                current,
+                size,
+            }),
+        ]
+
+    }
+}
+
 
 const mutedFunctions = [
     "getServerRequiredHackingLevel",
@@ -132,4 +131,4 @@ const mutedFunctions = [
     "getServerUsedRam",
 ]
 
-const stealingPercent = 0.5
+const iterationLength = 1000

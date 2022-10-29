@@ -42,66 +42,6 @@ export async function main(ns) {
 }
 
 /**
- * @param {({server: string, threadsToWeaken: number, timeToWeaken: number, growthThreads: number, timeToGrow: number, growthThreadsRemaining: number}|null)[]} needFill
- * @param {RunnerData[]} availableRunners
- * @param {NS} ns
- * @param {number} now
- */
-function tryFillWeaken(needFill, availableRunners, ns, now) {
-    const needWeaken = needFill.filter((item) => {
-        return item && item.threadsToWeaken > 0
-    }).sort((a, b) => {
-        if (a.threadsToWeaken * a.timeToWeaken < b.threadsToWeaken * b.timeToWeaken) {
-            return -1
-        } else if (a.threadsToWeaken * a.timeToWeaken > b.threadsToWeaken * b.timeToWeaken) {
-            return 1
-        } else {
-            return 0
-        }
-    })
-    while (needWeaken.length) {
-        const weaken = needWeaken.shift()
-        fillRunners(availableRunners, ns, {
-            allowSplit: true,
-            threads: weaken.threadsToWeaken,
-            target: weaken.server,
-            action: ActionsEnum.Weaken,
-            expectedDuration: weaken.timeToWeaken,
-        })
-    }
-}
-
-/**
- * @param {({server: string, threadsToWeaken: number, timeToWeaken: number, growthThreads: number, timeToGrow: number, growthThreadsRemaining: number}|null)[]} needFill
- * @param {RunnerData[]} availableRunners
- * @param {NS} ns
- * @param {number} now
- */
-function tryFillGrow(needFill, availableRunners, ns, now) {
-    const needGrow = needFill.filter((item) => {
-        return item && item.growthThreads > 0
-    }).sort((a, b) => {
-        if (a.growthThreads * a.timeToGrow < b.growthThreads * b.timeToGrow) {
-            return -1
-        } else if (a.growthThreads * a.timeToGrow > b.growthThreads * b.timeToGrow) {
-            return 1
-        } else {
-            return 0
-        }
-    })
-    while (needGrow.length) {
-        const weaken = needGrow.shift()
-        fillRunners(availableRunners, ns, {
-            allowSplit: true,
-            threads: weaken.growthThreads,
-            target: weaken.server,
-            action: ActionsEnum.Grow,
-            expectedDuration: weaken.timeToGrow,
-        })
-    }
-}
-
-/**
  * @param {RunnerData[]} availableRunners
  * @param {NS} ns
  * @param {{
@@ -110,8 +50,8 @@ function tryFillGrow(needFill, availableRunners, ns, now) {
  * target: string;
  * action: string;
  * delay: number | undefined;
- * expectedAmount: number | undefined;
- * expectedDuration: number | undefined;
+ * amount: number | undefined;
+ * duration: number | undefined;
  * }} jobParams
  */
 function fillRunners(availableRunners, ns, jobParams) {
@@ -122,8 +62,8 @@ function fillRunners(availableRunners, ns, jobParams) {
         target,
         action,
         delay,
-        expectedAmount,
-        expectedDuration,
+        amount,
+        duration,
     } = jobParams
 
     let remainingThreadsToFill = threads
@@ -139,8 +79,8 @@ function fillRunners(availableRunners, ns, jobParams) {
                 target,
                 action,
                 delay,
-                expectedAmount,
-                expectedDuration,
+                expectedAmount: amount,
+                expectedDuration: duration,
             })
             remainingThreadsToFill -= remainingThreadsToFill
         } else if (allowSplit) {
@@ -149,8 +89,8 @@ function fillRunners(availableRunners, ns, jobParams) {
                 target,
                 action,
                 delay,
-                expectedAmount,
-                expectedDuration,
+                expectedAmount: amount,
+                expectedDuration: duration,
             })
             remainingThreadsToFill -= runner.threadsAvailable
         }
@@ -232,18 +172,19 @@ function processJobs(ns, runners, targets, lfn) {
                 threads: threadsToWeakenGrow,
                 target: target.server,
                 action: ActionsEnum.Weaken,
-                expectedAmount: ns.weakenAnalyze(threadsToWeakenGrow),
-                expectedDuration: ns.getWeakenTime(target.server),
+                amount: ns.weakenAnalyze(threadsToWeakenGrow),
+                duration: Math.ceil(ns.getWeakenTime(target.server)),
             })
         } else if (target.currentMoney < target.maxMoney) {
-            let threadsToGrow = Math.ceil(ns.growthAnalyze(target.server, target.maxMoney / Math.max(1, target.currentMoney)))
+            const expectedAmount = Math.ceil(target.maxMoney / Math.max(1, target.currentMoney)) // it should be 2, better safe than sorry
+            let threadsToGrow = Math.ceil(ns.growthAnalyze(target.server, expectedAmount))
             fillRunners(availableRunners, ns, {
                 allowSplit: true,
                 threads: threadsToGrow,
                 target: target.server,
                 action: ActionsEnum.Grow,
-                expectedAmount: target.maxMoney - target.currentMoney,
-                expectedDuration: ns.getGrowTime(target.server),
+                amount: expectedAmount,
+                duration: Math.ceil(ns.getGrowTime(target.server)),
             })
         } else {
             let threadsToHack = Math.floor(ns.hackAnalyzeThreads(target.server, target.maxMoney * 0.5))
@@ -252,8 +193,8 @@ function processJobs(ns, runners, targets, lfn) {
                 threads: threadsToHack,
                 target: target.server,
                 action: ActionsEnum.Hack,
-                expectedAmount: target.maxMoney * 0.5,
-                expectedDuration: ns.getHackTime(target.server),
+                amount: target.maxMoney * 0.5,
+                duration: Math.ceil(ns.getHackTime(target.server)),
             })
         }
     }
@@ -278,89 +219,32 @@ function processJobs(ns, runners, targets, lfn) {
             continue
         }
         remainingAvailable -= state.totalThreads
-        const times = computeBatch(target, lfn)
 
         fillRunners(availableRunners, ns, {
             allowSplit: false,
-            threads: state.hack.threads,
             target: target.server,
             action: ActionsEnum.Hack,
-            delay: times[0][0],
-            expectedAmount: state.hack.amount,
-            expectedDuration: state.hack.duration,
+            ...state.hack,
         })
         fillRunners(availableRunners, ns, {
             allowSplit: false,
-            threads: state.weakenHack.threads,
             target: target.server,
             action: ActionsEnum.Weaken,
-            delay: times[1][0],
-            expectedAmount: state.weakenHack.amount,
-            expectedDuration: state.weakenHack.duration,
+            ...state.weakenHack,
         })
         fillRunners(availableRunners, ns, {
             allowSplit: false,
-            threads: state.grow.threads,
             target: target.server,
             action: ActionsEnum.Grow,
-            delay: times[2][0],
-            expectedAmount: state.grow.amount,
-            expectedDuration: state.grow.duration,
+            ...state.grow,
         })
         fillRunners(availableRunners, ns, {
             allowSplit: false,
-            threads: state.weakenGrow.threads,
             target: target.server,
             action: ActionsEnum.Weaken,
-            delay: times[3][0],
-            expectedAmount: state.weakenGrow.amount,
-            expectedDuration: state.weakenGrow.duration,
+            ...state.weakenGrow,
         })
     }
-
-    /*
-        const needFill = targets.map((item) => {
-            return item.getUpgradeStats()
-        }).filter((item) => {
-            return item && (item.threadsToWeaken > 0 || item.growthThreads > 0)
-        })
-
-        tryFillWeaken(needFill, availableRunners, ns, now)
-        tryFillGrow(needFill, availableRunners, ns, now)*/
-}
-
-/**
- *
- * @param {TargetData} target
- * @param {(...args: any[]) => void} lfn
- */
-function computeBatch(target, lfn) {
-    const hacks = target.targetState
-    const times = [
-        [
-            hacks.weakenHack.duration - 3 * scriptOffset - hacks.hack.duration,
-            hacks.weakenHack.duration - 3 * scriptOffset,
-        ],
-        [
-            hacks.weakenHack.duration - 2 * scriptOffset - hacks.weakenHack.duration,
-            hacks.weakenHack.duration - 2 * scriptOffset,
-        ],
-        [
-            hacks.weakenHack.duration - scriptOffset - hacks.grow.duration,
-            hacks.weakenHack.duration - scriptOffset,
-        ],
-        [
-            0,
-            hacks.weakenGrow.duration,
-        ],
-    ]
-
-    const offset = Math.min(times[0][0], times[1][0], times[2][0], times[3][0])
-    for (let i = 0; i < times.length; i++) {
-        times[i][0] -= offset
-        times[i][1] -= offset
-    }
-    return times
 }
 
 /**
@@ -516,5 +400,4 @@ const mutedFunctions = [
     "getServerUsedRam",
 ]
 
-const scriptOffset = 250
 const iterationLength = 1000

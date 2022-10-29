@@ -21,11 +21,11 @@ export async function main(ns) {
             0,
         ],
         [
-            "expectedAmount",
+            "amount",
             0,
         ],
         [
-            "expectedDuration",
+            "duration",
             0,
         ],
     ])
@@ -50,18 +50,17 @@ export async function main(ns) {
     switch (action) {
         case ActionsEnum.Weaken: {
             const value = await ns.weaken(target, {threads})
-            await writeAction(ns, target, action, expectedAmount, value, expectedDuration, Date.now() - dur0)
+            await writeAction(ns, target, action, threads, flags.delay, expectedAmount, value, expectedDuration, Date.now() - dur0)
             break
         }
         case ActionsEnum.Grow: {
             const value = await ns.grow(target, {threads})
-            const r = await writeAction(ns, target, action, expectedAmount, value, expectedDuration, Date.now() - dur0)
-            ns.tprint("Run: " + r)
+            await writeAction(ns, target, action, threads, flags.delay, expectedAmount, value, expectedDuration, Date.now() - dur0)
             break
         }
         case ActionsEnum.Hack: {
             const value = await ns.hack(target, {threads})
-            await writeAction(ns, target, action, expectedAmount, value, expectedDuration, Date.now() - dur0)
+            await writeAction(ns, target, action, threads, flags.delay, expectedAmount, value, expectedDuration, Date.now() - dur0)
             break
         }
         default: {
@@ -75,16 +74,20 @@ export async function main(ns) {
  * @param {NS} ns
  * @param {string} server
  * @param {string} action
+ * @param {number} threads
+ * @param {number} delay
  * @param {number} expectedAmount
  * @param {number} amount
  * @param {number} expectedDuration
  * @param {number} duration
  * @returns {Promise<any>}
  */
-async function writeAction(ns, server, action, expectedAmount, amount, expectedDuration, duration) {
+async function writeAction(ns, server, action, threads, delay, expectedAmount, amount, expectedDuration, duration) {
     return ns.writePort(PortAllocations.TargetState, JSON.stringify({
         server,
         action,
+        threads,
+        delay,
         expectedAmount,
         amount,
         expectedDuration,

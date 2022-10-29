@@ -6,15 +6,18 @@ export class TargetJobData {
      * @param {number} amount
      * @param {number} threads
      * @param {number} duration
+     * @param {number} delay
      */
     constructor({
                     amount,
                     threads,
                     duration,
+                    delay,
                 }) {
         this.amount = amount
         this.threads = threads
         this.duration = duration
+        this.delay = delay
     }
 }
 
@@ -24,7 +27,6 @@ export class TargetState {
      * @param {string} server
      * @param {string} state
      * @param {boolean} isRunning
-     * @param {number} end
      * @param {TargetJobData} hack
      * @param {TargetJobData} weakenHack
      * @param {TargetJobData} grow
@@ -37,7 +39,6 @@ export class TargetState {
                     server,
                     state,
                     isRunning,
-                    end,
                     hack,
                     weakenHack,
                     grow,
@@ -49,13 +50,13 @@ export class TargetState {
         this.server = server
         this.state = state
         this.isRunning = isRunning
-        this.end = end
+
         this.hack = hack
         this.weakenHack = weakenHack
         this.grow = grow
         this.weakenGrow = weakenGrow
+
         this.totalThreads = totalThreads
-        this.batchLength = batchLength
         this.expectedRevenue = expectedRevenue
     }
 }
@@ -116,7 +117,6 @@ export class TargetsStates {
     processStateMessage(message, lfn) {
         if (message.startsWith(MessagesEnum.Init)) {
             const name = message.substring(MessagesEnum.Init.length)
-            lfn(name)
             const newState = new TargetState({
                 server: name,
                 state: TargetStatesEnum.Init,
@@ -124,7 +124,6 @@ export class TargetsStates {
             this.states.set(newState.server, newState)
         } else if (message.startsWith(MessagesEnum.Running)) {
             const data = message.substring(MessagesEnum.Running.length).split(";")
-            lfn(data)
             const state = this.states.get(data[0])
             if (!state) {
                 return
@@ -132,8 +131,8 @@ export class TargetsStates {
             switch (state.state) {
                 case TargetStatesEnum.Init: {
                     state.isRunning = true
-                    if(data[1] === ActionsEnum.Hack) {
-                        state.state = TargetStatesEnum.PreparingHack
+                    if (data[1] === ActionsEnum.Hack) {
+                        state.state = TargetStatesEnum.Preparing
                     }
                     break
                 }
@@ -145,6 +144,8 @@ export class TargetsStates {
      * @param {{
      * server: string;
      * action: string;
+     * threads: number;
+     * delay: number;
      * expectedAmount: number;
      * amount: number;
      * expectedDuration: number;
@@ -153,14 +154,59 @@ export class TargetsStates {
      * @param {(...args: any[]) => void} lfn
      */
     processJobMessage(data, lfn) {
-        lfn(data);
+        lfn(data)
         const state = this.states.get(data.server)
         if (!state) {
             return
         }
+
         switch (state.state) {
             case TargetStatesEnum.Init: {
                 state.isRunning = false
+                break
+            }
+            case TargetStatesEnum.Preparing: {
+                state.isRunning = false
+                switch (data.action) {
+                    case ActionsEnum.Hack: {
+                        state.hack = new TargetJobData({
+                            threads: data.threads,
+                            amount: data.expectedAmount,
+                            duration: data.expectedDuration,
+                            delay: data.delay,
+                        })
+                        break
+                    }
+                    case ActionsEnum.Grow: {
+                        state.grow = new TargetJobData({
+                            threads: data.threads,
+                            amount: data.expectedAmount,
+                            duration: data.expectedDuration,
+                            delay: data.delay,
+                        })
+                        break
+                    }
+                    case ActionsEnum.Weaken: {
+                        if (state.grow) {
+                            state.weakenGrow = new TargetJobData({
+                                threads: data.threads,
+                                amount: data.expectedAmount,
+                                duration: data.expectedDuration,
+                                delay: data.delay,
+                            })
+                            this.#finalizeBatching(state)
+                        } else {
+                            state.weakenHack = new TargetJobData({
+                                threads: data.threads,
+                                amount: data.expectedAmount,
+                                duration: data.expectedDuration,
+                                delay: data.delay,
+                            })
+                        }
+                        break
+                    }
+
+                }
                 break
             }
         }
@@ -178,6 +224,54 @@ export class TargetsStates {
             lfn("!!! Error in saving jobState ", a)
         }
     }
+
+    /**
+     *
+     * @param {TargetState} state
+     */
+    #finalizeBatching(state) {
+        const times = this.#computeBatch(state)
+        state.hack.delay = times[0][0]
+        state.weakenHack.delay = times[1][0]
+        state.grow.delay = times[2][0]
+        state.weakenGrow.delay = times[3][0]
+
+        const pipelineLength = Math.max(state.hack.duration, state.weakenHack.duration, state.grow.duration, state.weakenGrow.duration) - Math.min(state.hack.duration, state.weakenHack.duration, state.grow.duration, state.weakenGrow.duration)
+        state.expectedRevenue = state.hack.amount / pipelineLength
+        state.state = TargetStatesEnum.Batching
+    }
+
+    /**
+     *
+     * @param {TargetState} state
+     */
+    #computeBatch(state) {
+        const times = [
+            [
+                state.weakenHack.duration - 3 * scriptOffset - state.hack.duration,
+                state.weakenHack.duration - 3 * scriptOffset,
+            ],
+            [
+                state.weakenHack.duration - 2 * scriptOffset - state.weakenHack.duration,
+                state.weakenHack.duration - 2 * scriptOffset,
+            ],
+            [
+                state.weakenHack.duration - scriptOffset - state.grow.duration,
+                state.weakenHack.duration - scriptOffset,
+            ],
+            [
+                0,
+                state.weakenGrow.duration,
+            ],
+        ]
+
+        const offset = Math.min(times[0][0], times[1][0], times[2][0], times[3][0])
+        for (let i = 0; i < times.length; i++) {
+            times[i][0] -= offset
+            times[i][1] -= offset
+        }
+        return times
+    }
 }
 
 const targetStatesFile = "/data/targetStates.txt"
@@ -190,10 +284,7 @@ const MessagesEnum = {
 export const TargetStatesEnum = {
     Init: "init",
     Batching: "batching",
-    PreparingHack: "preparingHack",
-    PreparingHackWeaken: "preparingHackWeaken",
-    PreparingGrow: "preparingGrow",
-    PreparingGrowWeaken: "preparingGrowWeaken",
+    Preparing: "preparing",
 }
 
 /**
@@ -225,3 +316,4 @@ export function changeState(ns, state, action) {
     ns.writePort(PortAllocations.TargetState, "init:" + server).then()
 }
 
+const scriptOffset = 250

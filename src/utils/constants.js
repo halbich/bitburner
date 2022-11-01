@@ -19,6 +19,13 @@ export const Files = {
     HackScript: "/src/run.js",
     Share: "share.js",
 
-    Dev: "dev.js"
+    UtilsConstants: "/src/utils/constants.js",
+    UtilsSlots: "/src/utils/slots.js",
+
+    Dev: "dev.js",
 
 }
+
+export const IterationLength = 1000
+export const SlotsCount = 5
+export const SlotSize = IterationLength / SlotsCount

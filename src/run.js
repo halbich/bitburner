@@ -1,8 +1,8 @@
-import {ActionsEnum, PortAllocations} from "src/utils/constants"
+import {ActionsEnum, PortAllocations, IterationLength} from "src/utils/constants"
 
 /** @param {NS} ns */
 export async function main(ns) {
-
+    const dur = Date.now()
     const flags = ns.flags([
         [
             "threads",
@@ -28,6 +28,10 @@ export async function main(ns) {
             "duration",
             0,
         ],
+        [
+            "id",
+            0,
+        ],
     ])
 
     if (!flags.action || !flags.target) {
@@ -36,7 +40,7 @@ export async function main(ns) {
     }
 
     if (flags.delay > 0) {
-        await ns.sleep(flags.delay)
+        await ns.sleep(flags.delay + dur % IterationLength)
     }
     const {
         action,
@@ -50,17 +54,20 @@ export async function main(ns) {
     switch (action) {
         case ActionsEnum.Weaken: {
             const value = await ns.weaken(target, {threads})
-            await writeAction(ns, target, action, threads, flags.delay, amount, value, duration, Date.now() - dur0)
+            ns.tprint("Weaken " + flags.id + " " + Date.now() % IterationLength)
+            await writeAction(ns, target, action, threads, flags.delay, amount, value, duration, dur, dur0)
             break
         }
         case ActionsEnum.Grow: {
             const value = await ns.grow(target, {threads})
-            await writeAction(ns, target, action, threads, flags.delay, amount, value, duration, Date.now() - dur0)
+            ns.tprint("Grow " + flags.id + " " + Date.now() % IterationLength)
+            await writeAction(ns, target, action, threads, flags.delay, amount, value, duration, dur, dur0)
             break
         }
         case ActionsEnum.Hack: {
             const value = await ns.hack(target, {threads})
-            await writeAction(ns, target, action, threads, flags.delay, amount, value, duration, Date.now() - dur0)
+            ns.tprint("Hack " + flags.id + " " + Date.now() % IterationLength)
+            await writeAction(ns, target, action, threads, flags.delay, amount, value, duration, dur, dur0)
             break
         }
         default: {
@@ -79,10 +86,11 @@ export async function main(ns) {
  * @param {number} expectedAmount
  * @param {number} amount
  * @param {number} expectedDuration
- * @param {number} duration
+ * @param {number} jobStartTimestamp
+ * @param {number} actionStartTimestamp
  * @returns {Promise<any>}
  */
-async function writeAction(ns, server, action, threads, delay, expectedAmount, amount, expectedDuration, duration) {
+async function writeAction(ns, server, action, threads, delay, expectedAmount, amount, expectedDuration, jobStartTimestamp, actionStartTimestamp) {
     return ns.writePort(PortAllocations.TargetState, JSON.stringify({
         server,
         action,
@@ -91,6 +99,7 @@ async function writeAction(ns, server, action, threads, delay, expectedAmount, a
         expectedAmount,
         amount,
         expectedDuration,
-        duration,
+        duration: Date.now() - actionStartTimestamp,
+        totalDuration: Date.now() - jobStartTimestamp,
     }))
 }

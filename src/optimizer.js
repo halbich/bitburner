@@ -21,7 +21,7 @@ export async function main(ns) {
 
             const msg = port.read().toString()
             if (msg.startsWith("{")) {
-                states.processJobMessage(JSON.parse(msg), ns.tprint)
+                states.processJobMessage(JSON.parse(msg), ns)
             } else {
                 states.processStateMessage(msg, ns.tprint)
             }

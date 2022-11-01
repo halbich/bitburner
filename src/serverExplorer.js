@@ -1,5 +1,6 @@
 import {ServerData, loadServerData, saveServerData} from "src/models/serverData.js"
 import {formatMoney} from "src/utils/utils.js"
+import {Files} from "src/utils/constants"
 
 /** @param {NS} ns */
 export async function main(ns) {
@@ -96,14 +97,11 @@ async function exploreHost(ns, index, hostData, exploreParams, lfn) {
     }
     for (const script of copyScripts) {
         if (exploreParams.restartScripts || !ns.fileExists(script, server)) {
-            ns.tprint(`Kill ${script} on ${server}`)
             ns.scriptKill(script, server)
 
             if (ns.fileExists(script, server)) {
-                ns.tprint(`Remove ${script} on ${server}`)
                 ns.rm(script, server)
             }
-            ns.tprint(`Copy ${script} on ${server}`)
             await ns.scp(script, server)
         }
     }
@@ -166,7 +164,7 @@ const mutedFunctions = [
     "getServerNumPortsRequired",
 ]
 const copyScripts = [
-    "/src/run.js",
-    "/src/utils/constants.js",
+    Files.HackScript,
+    Files.UtilsConstants,
 ]
 const moneyScriptRam = 2 // getScriptRam returned null instead of 2;

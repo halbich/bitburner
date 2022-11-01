@@ -1,4 +1,5 @@
-import {ActionsEnum, Files, PortAllocations} from "src/utils/constants"
+import {ActionsEnum, Files, PortAllocations, IterationLength, SlotSize} from "src/utils/constants"
+import {getNextSleepForSlot} from "src/utils/slots"
 
 export class TargetJobData {
     /**
@@ -128,14 +129,16 @@ export class TargetsStates {
             if (!state) {
                 return
             }
+            state.isRunning = true
+
             switch (state.state) {
                 case TargetStatesEnum.Init: {
-                    state.isRunning = true
                     if (data[1] === ActionsEnum.Hack) {
                         state.state = TargetStatesEnum.Preparing
                     }
                     break
                 }
+
             }
         }
     }
@@ -151,14 +154,15 @@ export class TargetsStates {
      * expectedDuration: number;
      * duration: number;
      * }} data
-     * @param {(...args: any[]) => void} lfn
+     * @param {NS} ns
      */
-    processJobMessage(data, lfn) {
-        lfn(data)
+    processJobMessage(data, ns) {
         const state = this.states.get(data.server)
         if (!state) {
             return
         }
+
+        ns.tprint(data)
 
         switch (state.state) {
             case TargetStatesEnum.Init: {
@@ -194,7 +198,7 @@ export class TargetsStates {
                                 duration: data.expectedDuration,
                                 delay: data.delay,
                             })
-                            this.#finalizeBatching(state)
+                            this.#finalizeBatching(state, ns)
                         } else {
                             state.weakenHack = new TargetJobData({
                                 threads: data.threads,
@@ -228,13 +232,32 @@ export class TargetsStates {
     /**
      *
      * @param {TargetState} state
+     * @param {NS} ns
      */
-    #finalizeBatching(state) {
+    #finalizeBatching(state, ns) {
+        ns.tprint("finalize")
+        state.hack.duration = Math.ceil(ns.getHackTime(state.server))
+        state.weakenHack.duration = Math.ceil(ns.getWeakenTime(state.server))
+        state.grow.duration = Math.ceil(ns.getGrowTime(state.server))
+        state.weakenGrow.duration = Math.ceil(ns.getWeakenTime(state.server))
+        ns.tprint(state)
         const times = this.#computeBatch(state)
-        state.hack.delay = times[0][0]
-        state.weakenHack.delay = times[1][0]
-        state.grow.delay = times[2][0]
-        state.weakenGrow.delay = times[3][0]
+        const offset = (getNextSleepForSlot(1, 1, times[0][0] + state.hack.duration) + IterationLength) % IterationLength + 10
+        ns.tprint(offset)
+        state.hack.delay = times[0][0] + offset
+        state.weakenHack.delay = times[1][0] + offset
+        state.grow.delay = times[2][0] + offset
+        state.weakenGrow.delay = times[3][0] + offset
+
+        ns.tprint(state.hack.delay + state.hack.duration)
+        ns.tprint(state.weakenHack.delay + state.weakenHack.duration)
+        ns.tprint(state.grow.delay + state.grow.duration)
+        ns.tprint(state.weakenGrow.delay + state.weakenGrow.duration)
+
+        ns.tprint((state.hack.delay + state.hack.duration) % IterationLength)
+        ns.tprint((state.weakenHack.delay + state.weakenHack.duration) % IterationLength)
+        ns.tprint((state.grow.delay + state.grow.duration) % IterationLength)
+        ns.tprint((state.weakenGrow.delay + state.weakenGrow.duration) % IterationLength)
 
         const pipelineLength = Math.max(state.hack.duration, state.weakenHack.duration, state.grow.duration, state.weakenGrow.duration) - Math.min(state.hack.duration, state.weakenHack.duration, state.grow.duration, state.weakenGrow.duration)
         state.expectedRevenue = state.hack.amount / pipelineLength
@@ -249,16 +272,16 @@ export class TargetsStates {
     #computeBatch(state) {
         const times = [
             [
-                state.weakenHack.duration - 3 * scriptOffset - state.hack.duration,
-                state.weakenHack.duration - 3 * scriptOffset,
+                state.weakenGrow.duration - 3 * SlotSize - state.hack.duration,
+                state.weakenGrow.duration - 3 * SlotSize,
             ],
             [
-                state.weakenHack.duration - 2 * scriptOffset - state.weakenHack.duration,
-                state.weakenHack.duration - 2 * scriptOffset,
+                state.weakenGrow.duration - 2 * SlotSize - state.weakenHack.duration,
+                state.weakenGrow.duration - 2 * SlotSize,
             ],
             [
-                state.weakenHack.duration - scriptOffset - state.grow.duration,
-                state.weakenHack.duration - scriptOffset,
+                state.weakenGrow.duration - SlotSize - state.grow.duration,
+                state.weakenGrow.duration - SlotSize,
             ],
             [
                 0,
@@ -314,5 +337,3 @@ export function changeState(ns, state, action) {
     }
     ns.writePort(PortAllocations.TargetState, "init:" + server).then()
 }
-
-const scriptOffset = 250

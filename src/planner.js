@@ -3,7 +3,10 @@ import {formatMoney, progressBar} from "src/utils/utils.js"
 import {loadRunners} from "src/models/runnerData.js"
 import {loadTargets} from "src/models/targetData.js"
 import {initServer, runJob, TargetsStates, TargetStatesEnum} from "src/models/targetState.js"
-import {ActionsEnum, Files} from "src/utils/constants"
+import {ActionsEnum, Files, IterationLength} from "src/utils/constants"
+import {getNextSleepForSlot} from "src/utils/slots"
+
+let id = 0
 
 /** @param {NS} ns */
 export async function main(ns) {
@@ -13,12 +16,23 @@ export async function main(ns) {
         ? ns.print
         : ns.tprint
 
+    lfn(Date.now())
+    lfn(Date.now() % IterationLength)
+
+    const sleep = getNextSleepForSlot(slotId)
+    if (sleep) {
+        await ns.sleep(sleep)
+    }
+
     for (const muted of mutedFunctions) {
         ns.disableLog(muted)
     }
     do {
         ns.clearLog()
         const start = Date.now()
+        const act = Date.now() % IterationLength
+        lfn(act)
+
         lfn(`Current iteration: ${new Date().toTimeString()}`)
 
         const states = new TargetsStates(ns, lfn)
@@ -36,8 +50,10 @@ export async function main(ns) {
         const length = Date.now() - start
         lfn(`Iteration done in ${length} ms`)
         if (continuous) {
-            await ns.sleep(Math.max(20, iterationLength - length))
+            const sleepTime = Math.max(20, IterationLength - length)
+            await ns.sleep(Math.max(20, getNextSleepForSlot(slotId, sleepTime)))
         }
+        id++
     } while (continuous)
 }
 
@@ -261,8 +277,6 @@ function processJobs(ns, runners, targets, lfn) {
  * }} job
  */
 function runWork(ns, runner, job) {
-    ns.tprint(job)
-    ns.tprint(runner.server)
     if (!job.threads || job.threads < 1) {
         return
     }
@@ -274,6 +288,8 @@ function runWork(ns, runner, job) {
         job.target,
         "--action",
         job.action,
+        "--id",
+        id,
     ]
 
     if (job.delay) {
@@ -355,7 +371,7 @@ function getTargetStringData(target) {
             size: 5,
         }),
         target.targetState
-            ? target.targetState.state
+            ? `${target.targetState.state}, ${target.targetState.isRunning}`
             : "",
 
     ]
@@ -399,4 +415,4 @@ const mutedFunctions = [
     "getServerUsedRam",
 ]
 
-const iterationLength = 1000
+const slotId = 0

@@ -162,11 +162,15 @@ function processJobs(ns, runners, targets, lfn) {
 
         switch (state.state) {
             case TargetStatesEnum.Batching: {
-                batchingTargets.push(item)
+                if (item.minSecurity === item.currentSecurity && item.currentMoney === item.maxMoney) {
+                    batchingTargets.push(item)
+                } else if(!state.runningJobs) {
+                    initTargets.push(item)
+                }
                 break
             }
             default: {
-                if (!state.isRunning) {
+                if (!state.runningJobs) {
                     initTargets.push(item)
                 }
                 break
@@ -203,15 +207,17 @@ function processJobs(ns, runners, targets, lfn) {
                 duration: Math.ceil(ns.getGrowTime(target.server)),
             })
         } else {
-            let threadsToHack = Math.floor(ns.hackAnalyzeThreads(target.server, target.maxMoney * 0.5))
-            fillRunners(availableRunners, ns, {
-                allowSplit: true,
-                threads: threadsToHack,
-                target: target.server,
-                action: ActionsEnum.Hack,
-                amount: target.maxMoney * 0.5,
-                duration: Math.ceil(ns.getHackTime(target.server)),
-            })
+            if (target.targetState.state !== TargetStatesEnum.Batching) {
+                let threadsToHack = Math.floor(ns.hackAnalyzeThreads(target.server, target.maxMoney * 0.5))
+                fillRunners(availableRunners, ns, {
+                    allowSplit: true,
+                    threads: threadsToHack,
+                    target: target.server,
+                    action: ActionsEnum.Hack,
+                    amount: target.maxMoney * 0.5,
+                    duration: Math.ceil(ns.getHackTime(target.server)),
+                })
+            }
         }
     }
 
@@ -235,6 +241,13 @@ function processJobs(ns, runners, targets, lfn) {
             continue
         }
         remainingAvailable -= state.totalThreads
+
+        ns.tprint(`${id}: ${target.currentMoney}/${target.maxMoney}, ${target.currentSecurity}/${target.minSecurity}`)
+
+        updateDelay(state.hack, 1)
+        updateDelay(state.weakenHack, 2)
+        updateDelay(state.grow, 3)
+        updateDelay(state.weakenGrow, 4)
 
         fillRunners(availableRunners, ns, {
             allowSplit: false,
@@ -261,6 +274,14 @@ function processJobs(ns, runners, targets, lfn) {
             ...state.weakenGrow,
         })
     }
+}
+
+/**
+ * @param {TargetJobData} source
+ * @param {number} slotId
+ */
+function updateDelay(source, slotId) {
+    source.delay = getNextSleepForSlot(slotId, source.delay + source.duration) - source.duration
 }
 
 /**
@@ -371,7 +392,7 @@ function getTargetStringData(target) {
             size: 5,
         }),
         target.targetState
-            ? `${target.targetState.state}, ${target.targetState.isRunning}`
+            ? `${target.targetState.state}, ${target.targetState.runningJobs}`
             : "",
 
     ]

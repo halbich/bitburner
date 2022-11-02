@@ -27,7 +27,7 @@ export class TargetState {
      *
      * @param {string} server
      * @param {string} state
-     * @param {boolean} isRunning
+     * @param {number} runningJobs
      * @param {TargetJobData} hack
      * @param {TargetJobData} weakenHack
      * @param {TargetJobData} grow
@@ -39,7 +39,7 @@ export class TargetState {
     constructor({
                     server,
                     state,
-                    isRunning,
+                    runningJobs,
                     hack,
                     weakenHack,
                     grow,
@@ -50,7 +50,7 @@ export class TargetState {
                 }) {
         this.server = server
         this.state = state
-        this.isRunning = isRunning
+        this.runningJobs = runningJobs ?? 0
 
         this.hack = hack
         this.weakenHack = weakenHack
@@ -129,7 +129,7 @@ export class TargetsStates {
             if (!state) {
                 return
             }
-            state.isRunning = true
+            state.runningJobs++
 
             switch (state.state) {
                 case TargetStatesEnum.Init: {
@@ -153,6 +153,7 @@ export class TargetsStates {
      * amount: number;
      * expectedDuration: number;
      * duration: number;
+     * totalDuration: number;
      * }} data
      * @param {NS} ns
      */
@@ -162,15 +163,18 @@ export class TargetsStates {
             return
         }
 
-        ns.tprint(data)
+        const pdata = {
+            exAm: data.expectedAmount,
+            am: data.amount,
+            exDur: data.expectedDuration,
+            dur: data.duration,
+            total: data.totalDuration,
+        }
+        ns.tprint(pdata)
+        state.runningJobs--
 
         switch (state.state) {
-            case TargetStatesEnum.Init: {
-                state.isRunning = false
-                break
-            }
             case TargetStatesEnum.Preparing: {
-                state.isRunning = false
                 switch (data.action) {
                     case ActionsEnum.Hack: {
                         state.hack = new TargetJobData({
@@ -242,7 +246,7 @@ export class TargetsStates {
         state.weakenGrow.duration = Math.ceil(ns.getWeakenTime(state.server))
         ns.tprint(state)
         const times = this.#computeBatch(state)
-        const offset = (getNextSleepForSlot(1, 1, times[0][0] + state.hack.duration) + IterationLength) % IterationLength + 10
+        const offset = 0 //(getNextSleepForSlot(1, 1, times[0][0] + state.hack.duration) + IterationLength) % IterationLength + 10
         ns.tprint(offset)
         state.hack.delay = times[0][0] + offset
         state.weakenHack.delay = times[1][0] + offset
@@ -307,6 +311,7 @@ export const TargetStatesEnum = {
     Init: "init",
     Batching: "batching",
     Preparing: "preparing",
+    Repairing: "repairing",
 }
 
 /**

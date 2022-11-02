@@ -75,6 +75,10 @@ function deserialize(object, states, ns) {
         return null
     }
 
+    if(object.name !== "foodnstuff") {
+        //return null
+    }
+
     const targetState = states.loadTargetStateOrDefault(object.name)
     return new TargetData(object.name, targetState, ns)
 }

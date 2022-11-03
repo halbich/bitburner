@@ -11,11 +11,11 @@ export function getNextSleepForSlot(slotId, sleepTime = 0, now = Date.now()) {
 
     if (slotId * SlotSize <= slot && slot < (slotId + 1) * SlotSize) {
         return sleepTime > 0
-            ? sleepTime - slot % SlotSize
+            ? Math.max(20, sleepTime - slot % SlotSize)
             : 0
     } else {
         return sleepTime > 0
-            ? sleepTime - slot + slotId * SlotSize
+            ? Math.max(20, sleepTime - slot + slotId * SlotSize)
             : IterationLength - slot
     }
 }

@@ -16,18 +16,14 @@ export async function main(ns) {
         ? ns.print
         : ns.tprint
 
-    lfn(Date.now())
-    lfn(Date.now() % IterationLength)
-
-    const sleep = getNextSleepForSlot(slotId)
-    if (sleep) {
-        await ns.sleep(sleep)
-    }
-
     for (const muted of mutedFunctions) {
         ns.disableLog(muted)
     }
     do {
+        const sleep = getNextSleepForSlot(slotId)
+        if (sleep) {
+            await ns.sleep(sleep)
+        }
         ns.clearLog()
         const start = Date.now()
         const act = Date.now() % IterationLength
@@ -51,7 +47,7 @@ export async function main(ns) {
         lfn(`Iteration done in ${length} ms`)
         if (continuous) {
             const sleepTime = Math.max(20, IterationLength - length)
-            await ns.sleep(Math.max(20, getNextSleepForSlot(slotId, sleepTime)))
+            await ns.sleep(getNextSleepForSlot(slotId, sleepTime))
         }
         id++
     } while (continuous)
@@ -69,8 +65,9 @@ export async function main(ns) {
  * amount: number | undefined;
  * duration: number | undefined;
  * }} jobParams
+ * @param {function(...[*]): void} lfn
  */
-function fillRunners(availableRunners, ns, jobParams) {
+function fillRunners(availableRunners, ns, jobParams, lfn) {
 
     const {
         allowSplit,
@@ -82,6 +79,7 @@ function fillRunners(availableRunners, ns, jobParams) {
         duration,
     } = jobParams
 
+    const start = Date.now()
     let remainingThreadsToFill = threads
     while (availableRunners.length && remainingThreadsToFill) {
         const runner = availableRunners.shift()
@@ -116,6 +114,8 @@ function fillRunners(availableRunners, ns, jobParams) {
         }
 
     }
+
+    lfn(`fill runners done in ${Date.now() - start} ms`)
 }
 
 /**
@@ -129,6 +129,7 @@ function processJobs(ns, runners, targets, lfn) {
     if (!availableRunners.length || !targets.length) {
         return
     }
+    const start = Date.now()
 
     availableRunners.sort((a, b) => {
         if (a.threadsAvailable > b.threadsAvailable) {
@@ -162,9 +163,9 @@ function processJobs(ns, runners, targets, lfn) {
 
         switch (state.state) {
             case TargetStatesEnum.Batching: {
-                if (item.minSecurity === item.currentSecurity && item.currentMoney === item.maxMoney) {
+                if (item.minSecurity === item.currentSecurity && item.currentMoney === item.maxMoney && state.runningJobs < 256) {
                     batchingTargets.push(item)
-                } else if(!state.runningJobs) {
+                } else if (!state.runningJobs) {
                     initTargets.push(item)
                 }
                 break
@@ -194,7 +195,7 @@ function processJobs(ns, runners, targets, lfn) {
                 action: ActionsEnum.Weaken,
                 amount: ns.weakenAnalyze(threadsToWeakenGrow),
                 duration: Math.ceil(ns.getWeakenTime(target.server)),
-            })
+            }, lfn)
         } else if (target.currentMoney < target.maxMoney) {
             const expectedAmount = Math.ceil(target.maxMoney / Math.max(1, target.currentMoney)) // it should be 2, better safe than sorry
             let threadsToGrow = Math.ceil(ns.growthAnalyze(target.server, expectedAmount))
@@ -205,7 +206,7 @@ function processJobs(ns, runners, targets, lfn) {
                 action: ActionsEnum.Grow,
                 amount: expectedAmount,
                 duration: Math.ceil(ns.getGrowTime(target.server)),
-            })
+            }, lfn)
         } else {
             if (target.targetState.state !== TargetStatesEnum.Batching) {
                 let threadsToHack = Math.floor(ns.hackAnalyzeThreads(target.server, target.maxMoney * 0.5))
@@ -216,7 +217,7 @@ function processJobs(ns, runners, targets, lfn) {
                     action: ActionsEnum.Hack,
                     amount: target.maxMoney * 0.5,
                     duration: Math.ceil(ns.getHackTime(target.server)),
-                })
+                }, lfn)
             }
         }
     }
@@ -234,6 +235,8 @@ function processJobs(ns, runners, targets, lfn) {
         }
     })
 
+    lfn(`batching sorted ${Date.now() - start} ms`)
+
     while (batchingTargets.length && remainingAvailable > 0) {
         const target = batchingTargets.shift()
         const state = target.targetState
@@ -242,7 +245,7 @@ function processJobs(ns, runners, targets, lfn) {
         }
         remainingAvailable -= state.totalThreads
 
-        ns.tprint(`${id}: ${target.currentMoney}/${target.maxMoney}, ${target.currentSecurity}/${target.minSecurity}`)
+        // ns.tprint(`${id}: ${target.currentMoney}/${target.maxMoney}, ${target.currentSecurity}/${target.minSecurity}`)
 
         updateDelay(state.hack, 1)
         updateDelay(state.weakenHack, 2)
@@ -254,26 +257,27 @@ function processJobs(ns, runners, targets, lfn) {
             target: target.server,
             action: ActionsEnum.Hack,
             ...state.hack,
-        })
+        }, lfn)
         fillRunners(availableRunners, ns, {
             allowSplit: false,
             target: target.server,
             action: ActionsEnum.Weaken,
             ...state.weakenHack,
-        })
+        }, lfn)
         fillRunners(availableRunners, ns, {
             allowSplit: false,
             target: target.server,
             action: ActionsEnum.Grow,
             ...state.grow,
-        })
+        }, lfn)
         fillRunners(availableRunners, ns, {
             allowSplit: false,
             target: target.server,
             action: ActionsEnum.Weaken,
             ...state.weakenGrow,
-        })
+        }, lfn)
     }
+    lfn(`done ${Date.now() - start} ms`)
 }
 
 /**

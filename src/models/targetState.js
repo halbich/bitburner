@@ -170,7 +170,7 @@ export class TargetsStates {
             dur: data.duration,
             total: data.totalDuration,
         }
-        ns.tprint(pdata)
+        //ns.tprint(pdata)
         state.runningJobs--
 
         switch (state.state) {
@@ -239,29 +239,16 @@ export class TargetsStates {
      * @param {NS} ns
      */
     #finalizeBatching(state, ns) {
-        ns.tprint("finalize")
         state.hack.duration = Math.ceil(ns.getHackTime(state.server))
         state.weakenHack.duration = Math.ceil(ns.getWeakenTime(state.server))
         state.grow.duration = Math.ceil(ns.getGrowTime(state.server))
         state.weakenGrow.duration = Math.ceil(ns.getWeakenTime(state.server))
-        ns.tprint(state)
+
         const times = this.#computeBatch(state)
-        const offset = 0 //(getNextSleepForSlot(1, 1, times[0][0] + state.hack.duration) + IterationLength) % IterationLength + 10
-        ns.tprint(offset)
-        state.hack.delay = times[0][0] + offset
-        state.weakenHack.delay = times[1][0] + offset
-        state.grow.delay = times[2][0] + offset
-        state.weakenGrow.delay = times[3][0] + offset
-
-        ns.tprint(state.hack.delay + state.hack.duration)
-        ns.tprint(state.weakenHack.delay + state.weakenHack.duration)
-        ns.tprint(state.grow.delay + state.grow.duration)
-        ns.tprint(state.weakenGrow.delay + state.weakenGrow.duration)
-
-        ns.tprint((state.hack.delay + state.hack.duration) % IterationLength)
-        ns.tprint((state.weakenHack.delay + state.weakenHack.duration) % IterationLength)
-        ns.tprint((state.grow.delay + state.grow.duration) % IterationLength)
-        ns.tprint((state.weakenGrow.delay + state.weakenGrow.duration) % IterationLength)
+        state.hack.delay = times[0][0]
+        state.weakenHack.delay = times[1][0]
+        state.grow.delay = times[2][0]
+        state.weakenGrow.delay = times[3][0]
 
         const pipelineLength = Math.max(state.hack.duration, state.weakenHack.duration, state.grow.duration, state.weakenGrow.duration) - Math.min(state.hack.duration, state.weakenHack.duration, state.grow.duration, state.weakenGrow.duration)
         state.expectedRevenue = state.hack.amount / pipelineLength

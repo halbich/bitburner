@@ -54,19 +54,19 @@ export async function main(ns) {
     switch (action) {
         case ActionsEnum.Weaken: {
             const value = await ns.weaken(target, {threads})
-            ns.tprint("Weaken " + flags.id + " " + Date.now() % IterationLength)
+            //ns.tprint("Weaken " + flags.id + " " + Date.now() % IterationLength)
             await writeAction(ns, target, action, threads, flags.delay, amount, value, duration, dur, dur0)
             break
         }
         case ActionsEnum.Grow: {
             const value = await ns.grow(target, {threads})
-            ns.tprint("Grow " + flags.id + " " + Date.now() % IterationLength)
+            //ns.tprint("Grow " + flags.id + " " + Date.now() % IterationLength)
             await writeAction(ns, target, action, threads, flags.delay, amount, value, duration, dur, dur0)
             break
         }
         case ActionsEnum.Hack: {
             const value = await ns.hack(target, {threads})
-            ns.tprint("Hack " + flags.id + " " + Date.now() % IterationLength)
+            //ns.tprint("Hack " + flags.id + " " + Date.now() % IterationLength)
             await writeAction(ns, target, action, threads, flags.delay, amount, value, duration, dur, dur0)
             break
         }

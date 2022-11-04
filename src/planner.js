@@ -81,7 +81,9 @@ function fillRunners(availableRunners, ns, jobParams, lfn) {
 
     const start = Date.now()
     let remainingThreadsToFill = threads
-    while (availableRunners.length && remainingThreadsToFill) {
+    let i = availableRunners.length
+    while (availableRunners.length && remainingThreadsToFill && i) {
+        i--
         const runner = availableRunners.shift()
         if (!runner.threadsAvailable) {
             continue

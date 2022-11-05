@@ -81,6 +81,15 @@ class ServerData {
         this._scriptingAvailable = value
     }
 
+    /** @returns {boolean | undefined} */
+    get backdoorInstalled() {
+        return this._backdoorInstalled
+    }
+
+    set backdoorInstalled(value) {
+        this._backdoorInstalled = value
+    }
+
     serialize() {
         const result = {
             name: this.serverName,
@@ -182,6 +191,7 @@ const savedProperties = [
     "maxRamPercentage",
     "scriptingAvailable",
     "parent",
+    "backdoorInstalled"
 ]
 
 export {ServerData, loadServerData, saveServerData}

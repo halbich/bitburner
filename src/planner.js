@@ -117,7 +117,7 @@ function fillRunners(availableRunners, ns, jobParams, lfn) {
 
     }
 
-    lfn(`fill runners done in ${Date.now() - start} ms`)
+    //lfn(`fill runners done in ${Date.now() - start} ms`)
 }
 
 /**
@@ -144,7 +144,7 @@ function processJobs(ns, runners, targets, lfn) {
     })
 
     const available = availableRunners.filter((item) => {
-        return item.threadsAvailable
+        return item.threadsAvailable && item.server !== "home"
     })
 
     const totalAvailable = available.reduce((partial, a) => {
@@ -165,7 +165,7 @@ function processJobs(ns, runners, targets, lfn) {
 
         switch (state.state) {
             case TargetStatesEnum.Batching: {
-                if (item.minSecurity === item.currentSecurity && item.currentMoney === item.maxMoney && state.runningJobs < 256) {
+                if (item.minSecurity === item.currentSecurity && item.currentMoney === item.maxMoney && state.runningJobs < 1024) {
                     batchingTargets.push(item)
                 } else if (!state.runningJobs) {
                     initTargets.push(item)
@@ -190,7 +190,7 @@ function processJobs(ns, runners, targets, lfn) {
             while (target.currentSecurity - ns.weakenAnalyze(threadsToWeakenGrow) > target.minSecurity) {
                 threadsToWeakenGrow++
             }
-            fillRunners(availableRunners, ns, {
+            fillRunners(available, ns, {
                 allowSplit: true,
                 threads: threadsToWeakenGrow,
                 target: target.server,
@@ -201,7 +201,7 @@ function processJobs(ns, runners, targets, lfn) {
         } else if (target.currentMoney < target.maxMoney) {
             const expectedAmount = Math.ceil(target.maxMoney / Math.max(1, target.currentMoney)) // it should be 2, better safe than sorry
             let threadsToGrow = Math.ceil(ns.growthAnalyze(target.server, expectedAmount))
-            fillRunners(availableRunners, ns, {
+            fillRunners(available, ns, {
                 allowSplit: true,
                 threads: threadsToGrow,
                 target: target.server,
@@ -212,7 +212,7 @@ function processJobs(ns, runners, targets, lfn) {
         } else {
             if (target.targetState.state !== TargetStatesEnum.Batching) {
                 let threadsToHack = Math.floor(ns.hackAnalyzeThreads(target.server, target.maxMoney * 0.5))
-                fillRunners(availableRunners, ns, {
+                fillRunners(available, ns, {
                     allowSplit: true,
                     threads: threadsToHack,
                     target: target.server,
@@ -241,6 +241,9 @@ function processJobs(ns, runners, targets, lfn) {
 
     while (batchingTargets.length && remainingAvailable > 0) {
         const target = batchingTargets.shift()
+        if (ignoreServers.includes(target.server)) {
+            continue
+        }
         const state = target.targetState
         if (state.totalThreads > remainingAvailable) {
             continue
@@ -254,25 +257,25 @@ function processJobs(ns, runners, targets, lfn) {
         updateDelay(state.grow, 3)
         updateDelay(state.weakenGrow, 4)
 
-        fillRunners(availableRunners, ns, {
+        fillRunners(available, ns, {
             allowSplit: false,
             target: target.server,
             action: ActionsEnum.Hack,
             ...state.hack,
         }, lfn)
-        fillRunners(availableRunners, ns, {
+        fillRunners(available, ns, {
             allowSplit: false,
             target: target.server,
             action: ActionsEnum.Weaken,
             ...state.weakenHack,
         }, lfn)
-        fillRunners(availableRunners, ns, {
+        fillRunners(available, ns, {
             allowSplit: false,
             target: target.server,
             action: ActionsEnum.Grow,
             ...state.grow,
         }, lfn)
-        fillRunners(availableRunners, ns, {
+        fillRunners(available, ns, {
             allowSplit: false,
             target: target.server,
             action: ActionsEnum.Weaken,
@@ -443,3 +446,8 @@ const mutedFunctions = [
 ]
 
 const slotId = 0
+
+const ignoreServers = [
+   /* "n00dles",
+    "joesguns",*/
+]

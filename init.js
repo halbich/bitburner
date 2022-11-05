@@ -1,7 +1,7 @@
-/** @param {NS} ns */
 import {Files} from "src/utils/constants"
 import {loadRunners} from "src/models/runnerData"
 
+/** @param {NS} ns */
 export async function main(ns) {
 
     const runners = loadRunners(ns, ns.tprint)
@@ -18,19 +18,29 @@ export async function main(ns) {
     ns.scriptKill(Files.HackScript, target)
 
     // update run script
-    ns.exec(Files.ServerExplorer, target, 1, "r")
+    const updateRunScripts = ns.exec(Files.ServerExplorer, target, 1, "r")
 
-    await ns.sleep(2000);
+    while (ns.isRunning(updateRunScripts, target)) {
+        await ns.sleep(500)
+    }
     // clear databases
-    ns.write(Files.Db, "[]")
-    ns.write(Files.TargetStates, "[]")
+    await ns.write(Files.Db, "[]")
+    await ns.write(Files.TargetStates, "[]")
 
     ns.tprint(`Running scripts at ${target}`)
 
-    ns.exec(Files.HacknetScaler, target)
-    ns.exec(Files.ServerExplorer, target, 1, "c")
-    ns.exec(Files.Optimizer, target, 1)
-    ns.exec(Files.Planner, target, 1, "c")
+    if (!ns.exec(Files.ServerExplorer, target, 1, "c")) {
+        ns.tprint("Failed to start ServerExplorer")
+    }
+    if (!ns.exec(Files.Optimizer, target, 1)) {
+        ns.tprint("Failed to start Optimizer")
+    }
+    if (!ns.exec(Files.Planner, target, 1, "c")) {
+        ns.tprint("Failed to start Planner")
+    }
+    if (!ns.exec(Files.HacknetScaler, target)) {
+        ns.tprint("Failed to start HacknetScaler")
+    }
 
 }
 

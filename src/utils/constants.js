@@ -29,3 +29,4 @@ export const Files = {
 export const IterationLength = 1000
 export const SlotsCount = 5
 export const SlotSize = IterationLength / SlotsCount
+export const IterationOffset = 100

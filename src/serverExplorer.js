@@ -30,6 +30,7 @@ export async function main(ns) {
             home.ttl = 0
             home.maxRamPercentage = 0.95
             home.note = "home"
+            home.backdoorInstalled = true
             index.set(home.serverName, home)
         }
 
@@ -84,6 +85,12 @@ async function exploreHost(ns, index, hostData, exploreParams, lfn) {
         return
     }
 
+    if (!hostData.backdoorInstalled && ns.singularity.connect(server)) {
+        await ns.singularity.installBackdoor()
+        hostData.backdoorInstalled = true;
+        ns.singularity.connect("home")
+    }
+
     const maxRamAvailable = ns.getServerMaxRam(server) * (hostData.maxRamPercentage ?? 1)
     hostData.scriptingAvailable = Math.floor(maxRamAvailable / moneyScriptRam) > 0
 
@@ -103,6 +110,22 @@ async function exploreHost(ns, index, hostData, exploreParams, lfn) {
                 ns.rm(script, server)
             }
             await ns.scp(script, server)
+        }
+    }
+
+    const files = ns.ls(server).filter((item) => {
+        return !item.startsWith("/src/")
+
+    })
+
+    for (const file of files) {
+        if (file.endsWith(".lit")) {
+            await ns.scp(`${file}`, "home", server)
+        } else if (file.endsWith(".cct")) {
+
+            lfn(file)
+        } else {
+            lfn(file)
         }
     }
 

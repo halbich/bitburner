@@ -7,9 +7,19 @@ export async function main(ns) {
     const ha = ns.hacknet
     //1% of current funds, per cycle.
     const allowancePercentage = 0.01
+    const maxRam = 1048576
     while (true) {
         let upgraded = false
         ns.clearLog()
+        const currentCash = ns.getServerMoneyAvailable("home") * allowancePercentage
+        if (ha.numNodes() === 0) {
+            if (ha.getPurchaseNodeCost() <= currentCash) {
+                ha.purchaseNode()
+            }
+        } else if (ns.getPurchasedServers().length < ns.getPurchasedServerLimit() && ns.getPurchasedServerCost(maxRam)) {
+            ns.purchaseServer("runner", maxRam)
+        }
+
         for (let i = 0; i < ha.numNodes(); i++) {
             const gain = [
                 0,

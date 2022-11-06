@@ -2,8 +2,7 @@ import {formatMoney} from "src/utils/utils.js"
 
 /** @param {NS} ns */
 export async function main(ns) {
-    ns.disableLog("getServerMoneyAvailable")
-    ns.disableLog("sleep")
+    ns.disableLog("ALL")
     const ha = ns.hacknet
     //1% of current funds, per cycle.
     const allowancePercentage = 0.01

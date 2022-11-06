@@ -5,9 +5,7 @@ import {PortAllocations} from "src/utils/constants"
 export async function main(ns) {
     const lfn = ns.print
 
-    for (const muted of mutedFunctions) {
-        ns.disableLog(muted)
-    }
+    ns.disableLog("ALL")
     const port = ns.getPortHandle(PortAllocations.TargetState)
     const states = new TargetsStates(ns, lfn)
 
@@ -35,8 +33,6 @@ export async function main(ns) {
 
     }
 }
-
-const mutedFunctions = []
 
 
 

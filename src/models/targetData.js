@@ -13,7 +13,6 @@ class TargetData {
         this._server = server
         this._targetState = targetState
         this._ns = ns
-        this._note = undefined
 
     }
 
@@ -73,10 +72,6 @@ function deserialize(object, states, ns) {
     }
     if (!ns.getServerMaxMoney(object.name) || !object.hasAdmin) {
         return null
-    }
-
-    if(object.name !== "foodnstuff") {
-        //return null
     }
 
     const targetState = states.loadTargetStateOrDefault(object.name)

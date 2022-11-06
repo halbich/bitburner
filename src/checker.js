@@ -16,9 +16,7 @@ export async function main(ns) {
         ? ns.print
         : ns.tprint
 
-    for (const muted of mutedFunctions) {
-        ns.disableLog(muted)
-    }
+    ns.disableLog("ALL")
     do {
         const sleep = getNextSleepForSlot(slotId)
         if (sleep) {
@@ -458,21 +456,6 @@ function getUpdateProgressBar(max, current, size) {
 
     }
 }
-
-const mutedFunctions = [
-    "getServerRequiredHackingLevel",
-    "getHackingLevel",
-    "scan",
-    "getServerMaxRam",
-    "getServerMaxMoney",
-    "scp",
-    "sleep",
-    "getServerMoneyAvailable",
-    "getServerSecurityLevel",
-    "getServerMinSecurityLevel",
-    "exec",
-    "getServerUsedRam",
-]
 
 const slotId = 0
 

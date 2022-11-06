@@ -6,8 +6,6 @@ import {initServer, runJob, TargetsStates, TargetStatesEnum} from "src/models/ta
 import {ActionsEnum, Files, IterationLength, IterationOffset} from "src/utils/constants"
 import {getNextSleepForSlot1} from "src/utils/slots"
 
-let iteration = 0
-
 /** @param {NS} ns */
 export async function main(ns) {
     const ar = ns.args[0] ?? ""
@@ -16,19 +14,13 @@ export async function main(ns) {
         ? ns.print
         : ns.tprint
 
-    for (const muted of mutedFunctions) {
-        ns.disableLog(muted)
-    }
+    ns.disableLog("ALL")
     do {
-        const sleep = getNextSleepForSlot1(slotId)
-        if (sleep) {
-            await ns.sleep(sleep)
-        }
 
         ns.clearLog()
-        lfn(`Sleep ${sleep}`)
         const start = Date.now()
-        const act = Date.now() % IterationLength
+        const act = start % IterationOffset
+        const iteration = Math.floor(start / IterationOffset)
         lfn(act)
 
         lfn(`Current iteration: ${new Date().toTimeString()} ${iteration}`)
@@ -39,7 +31,7 @@ export async function main(ns) {
 
         lfn(`load ${Date.now() - start} ms`)
 
-        processJobs(ns, runners, targets, lfn)
+        processJobs(ns, runners, targets, iteration, lfn)
 
         const display = targets.filter((item) => {
                 return forceServers.includes(item.server)
@@ -54,9 +46,9 @@ export async function main(ns) {
         lfn(`Iteration done in ${length} ms`)
         if (continuous) {
             const sleepTime = Math.max(20, IterationOffset - length)
-            await ns.sleep(getNextSleepForSlot1(slotId, sleepTime))
+            lfn(`Sleep ${sleepTime}`)
+            await ns.sleep(sleepTime)
         }
-        iteration++
     } while (continuous)
 }
 
@@ -72,9 +64,10 @@ export async function main(ns) {
  * amount: number | undefined;
  * duration: number | undefined;
  * }} jobParams
+ * @param {number} iteration
  * @param {function(...[*]): void} lfn
  */
-function fillRunners(availableRunners, ns, jobParams, lfn) {
+function fillRunners(availableRunners, ns, jobParams, iteration, lfn) {
 
     const {
         allowSplit,
@@ -104,7 +97,7 @@ function fillRunners(availableRunners, ns, jobParams, lfn) {
                 delay,
                 amount,
                 duration,
-            })
+            }, iteration)
             remainingThreadsToFill -= remainingThreadsToFill
         } else if (allowSplit) {
             runWork(ns, runner, {
@@ -114,7 +107,7 @@ function fillRunners(availableRunners, ns, jobParams, lfn) {
                 delay,
                 amount,
                 duration,
-            })
+            }, iteration)
             remainingThreadsToFill -= runner.threadsAvailable
         }
 
@@ -131,9 +124,10 @@ function fillRunners(availableRunners, ns, jobParams, lfn) {
  * @param {NS} ns
  * @param {RunnerData[]} runners
  * @param {TargetData[]} targets
+ * @param {number} iteration
  * @param {(...args: any[]) => void} lfn
  */
-function processJobs(ns, runners, targets, lfn) {
+function processJobs(ns, runners, targets, iteration, lfn) {
     const availableRunners = Array.from(runners)
     if (!availableRunners.length || !targets.length) {
         return
@@ -204,7 +198,7 @@ function processJobs(ns, runners, targets, lfn) {
                 action: ActionsEnum.Weaken,
                 amount: ns.weakenAnalyze(threadsToWeakenGrow),
                 duration: Math.ceil(ns.getWeakenTime(target.server)),
-            }, lfn)
+            }, iteration, lfn)
         } else if (target.currentMoney < target.maxMoney) {
             const expectedAmount = Math.ceil(target.maxMoney / Math.max(1, target.currentMoney)) // it should be 2, better safe than sorry
             let threadsToGrow = Math.ceil(ns.growthAnalyze(target.server, expectedAmount))
@@ -215,7 +209,7 @@ function processJobs(ns, runners, targets, lfn) {
                 action: ActionsEnum.Grow,
                 amount: expectedAmount,
                 duration: Math.ceil(ns.getGrowTime(target.server)),
-            }, lfn)
+            }, iteration, lfn)
         } else {
             if (target.targetState.state !== TargetStatesEnum.Batching) {
                 let threadsToHack = Math.floor(ns.hackAnalyzeThreads(target.server, target.maxMoney * 0.5))
@@ -226,7 +220,7 @@ function processJobs(ns, runners, targets, lfn) {
                     action: ActionsEnum.Hack,
                     amount: target.maxMoney * 0.5,
                     duration: Math.ceil(ns.getHackTime(target.server)),
-                }, lfn)
+                }, iteration, lfn)
             }
         }
     }
@@ -270,25 +264,25 @@ function processJobs(ns, runners, targets, lfn) {
             target: target.server,
             action: ActionsEnum.Hack,
             ...state.hack,
-        }, lfn)
+        }, iteration, lfn)
         fillRunners(available, ns, {
             allowSplit: false,
             target: target.server,
             action: ActionsEnum.Weaken,
             ...state.weakenHack,
-        }, lfn)
+        }, iteration, lfn)
         fillRunners(available, ns, {
             allowSplit: false,
             target: target.server,
             action: ActionsEnum.Grow,
             ...state.grow,
-        }, lfn)
+        }, iteration, lfn)
         fillRunners(available, ns, {
             allowSplit: false,
             target: target.server,
             action: ActionsEnum.Weaken,
             ...state.weakenGrow,
-        }, lfn)
+        }, iteration, lfn)
     }
     lfn(`done ${Date.now() - start} ms`)
 }
@@ -313,8 +307,9 @@ function updateDelay(source, slotId) {
  *     amount: number|undefined;
  *     duration: number | undefined;
  * }} job
+ * @param {number} iteration
  */
-function runWork(ns, runner, job) {
+function runWork(ns, runner, job, iteration) {
     if (!job.threads || job.threads < 1) {
         return
     }
@@ -438,22 +433,6 @@ function getUpdateProgressBar(max, current, size) {
     }
 }
 
-const mutedFunctions = [
-    "getServerRequiredHackingLevel",
-    "getHackingLevel",
-    "scan",
-    "getServerMaxRam",
-    "getServerMaxMoney",
-    "scp",
-    "sleep",
-    "getServerMoneyAvailable",
-    "getServerSecurityLevel",
-    "getServerMinSecurityLevel",
-    "exec",
-    "getServerUsedRam",
-]
-
-const slotId = 0
 
 const forceServers = [
     "n00dles",

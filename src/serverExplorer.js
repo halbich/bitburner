@@ -14,9 +14,7 @@ export async function main(ns) {
         ? ns.print
         : ns.tprint
 
-    for (const muted of mutedFunctions) {
-        ns.disableLog(muted)
-    }
+    ns.disableLog("ALL")
 
     do {
         ns.clearLog()
@@ -87,7 +85,7 @@ async function exploreHost(ns, index, hostData, exploreParams, lfn) {
 
     if (!hostData.backdoorInstalled && ns.singularity.connect(server)) {
         await ns.singularity.installBackdoor()
-        hostData.backdoorInstalled = true;
+        hostData.backdoorInstalled = true
         ns.singularity.connect("home")
     }
 
@@ -170,22 +168,6 @@ function open(ns, target) {
     return ns.hasRootAccess(target)
 }
 
-const mutedFunctions = [
-    "getServerRequiredHackingLevel",
-    "getHackingLevel",
-    "scan",
-    "getServerMaxRam",
-    "getServerMaxMoney",
-    "scp",
-    "sleep",
-    "getServerMoneyAvailable",
-    "brutessh",
-    "ftpcrack",
-    "relaysmtp",
-    "httpworm",
-    "sqlinject",
-    "getServerNumPortsRequired",
-]
 const copyScripts = [
     Files.HackScript,
     Files.UtilsConstants,

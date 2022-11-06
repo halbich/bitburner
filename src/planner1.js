@@ -3,10 +3,10 @@ import {formatMoney, progressBar} from "src/utils/utils.js"
 import {loadRunners} from "src/models/runnerData.js"
 import {loadTargets} from "src/models/targetData.js"
 import {initServer, runJob, TargetsStates, TargetStatesEnum} from "src/models/targetState.js"
-import {ActionsEnum, Files, IterationLength} from "src/utils/constants"
-import {getNextSleepForSlot} from "src/utils/slots"
+import {ActionsEnum, Files, IterationLength, IterationOffset} from "src/utils/constants"
+import {getNextSleepForSlot1} from "src/utils/slots"
 
-let id = 0
+let iteration = 0
 
 /** @param {NS} ns */
 export async function main(ns) {
@@ -20,16 +20,18 @@ export async function main(ns) {
         ns.disableLog(muted)
     }
     do {
-        const sleep = getNextSleepForSlot(slotId)
+        const sleep = getNextSleepForSlot1(slotId)
         if (sleep) {
             await ns.sleep(sleep)
         }
+
         ns.clearLog()
+        lfn(`Sleep ${sleep}`)
         const start = Date.now()
         const act = Date.now() % IterationLength
         lfn(act)
 
-        lfn(`Current iteration: ${new Date().toTimeString()}`)
+        lfn(`Current iteration: ${new Date().toTimeString()} ${iteration}`)
 
         const states = new TargetsStates(ns, lfn)
         const runners = loadRunners(ns, lfn)
@@ -39,17 +41,22 @@ export async function main(ns) {
 
         processJobs(ns, runners, targets, lfn)
 
+        const display = targets.filter((item) => {
+                return forceServers.includes(item.server)
+            },
+        )
+
         lfn(`process ${Date.now() - start} ms`)
         //printTable(lfn, runners, getRunnerStringData)
-        printTable(lfn, targets, getTargetStringData)
+        printTable(lfn, display, getTargetStringData)
 
         const length = Date.now() - start
         lfn(`Iteration done in ${length} ms`)
         if (continuous) {
-            const sleepTime = Math.max(20, IterationLength - length)
-            await ns.sleep(getNextSleepForSlot(slotId, sleepTime))
+            const sleepTime = Math.max(20, IterationOffset - length)
+            await ns.sleep(getNextSleepForSlot1(slotId, sleepTime))
         }
-        id++
+        iteration++
     } while (continuous)
 }
 
@@ -241,9 +248,10 @@ function processJobs(ns, runners, targets, lfn) {
 
     while (batchingTargets.length && remainingAvailable > 0) {
         const target = batchingTargets.shift()
-        if (ignoreServers.includes(target.server)) {
+        if (!forceServers.includes(target.server)) {
             continue
         }
+        continue
         const state = target.targetState
         if (state.totalThreads > remainingAvailable) {
             continue
@@ -319,7 +327,7 @@ function runWork(ns, runner, job) {
         "--action",
         job.action,
         "--id",
-        id,
+        iteration,
     ]
 
     if (job.delay) {
@@ -447,7 +455,7 @@ const mutedFunctions = [
 
 const slotId = 0
 
-const ignoreServers = [
+const forceServers = [
     "n00dles",
     "joesguns",
 ]

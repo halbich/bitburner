@@ -92,8 +92,6 @@ export function progressBar({
     return `${res.join("")} ${percentage}`
 }
 
-
-
 export const ColorEnum = {
     Default: "\u001b[0m",
     Black: "\u001b[30m",
@@ -112,4 +110,12 @@ export const ColorEnum = {
     BrightMagenta: "\u001b[35;1m",
     BrightCyan: "\u001b[36;1m",
     BrightWhite: "\u001b[37;1m",
+}
+
+export const Colors = {
+    Start: ColorEnum.White,
+    Hack: ColorEnum.Red,
+    WeakenHack: ColorEnum.Cyan,
+    Grow: ColorEnum.Yellow,
+    WeakenGrow: ColorEnum.Green,
 }

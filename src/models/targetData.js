@@ -13,7 +13,6 @@ class TargetData {
         this._server = server
         this._targetState = targetState
         this._ns = ns
-
     }
 
     /**
@@ -56,6 +55,13 @@ class TargetData {
      */
     get targetState() {
         return this._targetState
+    }
+
+    canStartBatch() {
+        if(!this._targetState) {
+            return false
+        }
+        return this._targetState.canStartBatch()
     }
 
 }

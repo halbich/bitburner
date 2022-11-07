@@ -1,5 +1,5 @@
 import {printTable} from "src/utils/table.js"
-import {colorCode, ColorEnum, formatMoney, progressBar} from "src/utils/utils.js"
+import {colorCode, ColorEnum, Colors, formatMoney, progressBar} from "src/utils/utils.js"
 import {loadRunners} from "src/models/runnerData.js"
 import {loadTargets} from "src/models/targetData.js"
 import {initServer, runJob, TargetsStates, TargetStatesEnum} from "src/models/targetState.js"
@@ -56,65 +56,7 @@ export async function main(ns) {
     } while (continuous)
 }
 
-/**
- * @param {*} totalLength
- * @param {number} step
- * @param {number} hackB
- * @param {number} hackE
- * @param {number} weakenHackB
- * @param {number} weakenHackE
- * @param {number} growB
- * @param {number} growE
- * @param {number} weakenGrowB
- * @param {number} weakenGrowE
- * @return {{actionArray: string[]; startData: number[] }}
- *
- */
-function computeArrayForBatch(totalLength, step, hackB, hackE, weakenHackB, weakenHackE, growB, growE, weakenGrowB, weakenGrowE) {
-    const actionArray = new Array(totalLength)
-    const startData = []
-    for (let start = 0; start < totalLength; start += step) {
 
-        const _hackB = (hackB + start + totalLength) % totalLength
-        const _hackE = (hackE + start + totalLength) % totalLength
-        const _weakenHackB = (weakenHackB + start + totalLength) % totalLength
-        const _weakenHackE = (weakenHackE + start + totalLength) % totalLength
-        const _growB = (growB + start + totalLength) % totalLength
-        const _growE = (growE + start + totalLength) % totalLength
-        const _weakenGrowB = (weakenGrowB + start + totalLength) % totalLength
-        const _weakenGrowE = (weakenGrowE + start + totalLength) % totalLength
-
-        if (!actionArray[start] &&
-            !actionArray[_hackB] && !actionArray[_hackE] &&
-            !actionArray[_weakenHackB] && !actionArray[_weakenHackE] &&
-            !actionArray[_growB] && !actionArray[_growE] &&
-            !actionArray[_weakenGrowB] && !actionArray[_weakenGrowE]) {
-
-            startData.push(start)
-            actionArray[start] = colorCode("|", ColorEnum.White)
-            actionArray[_hackB] = colorCode("<", Colors.Hack)
-            actionArray[_hackE] = colorCode(">", Colors.Hack)
-            actionArray[_weakenHackB] = colorCode("<", Colors.WeakenHack)
-            actionArray[_weakenHackE] = colorCode(">", Colors.WeakenHack)
-            actionArray[_growB] = colorCode("<", Colors.Grow)
-            actionArray[_growE] = colorCode(">", Colors.Grow)
-            actionArray[_weakenGrowB] = colorCode("<", Colors.WeakenGrow)
-            actionArray[_weakenGrowE] = colorCode(">", Colors.WeakenGrow)
-
-            for (let i = _hackE; i < _weakenGrowE; i++) {
-                if (!actionArray[i]) {
-                    actionArray [i] = colorCode("-", ColorEnum.Black)
-                }
-            }
-        }
-
-    }
-
-    return {
-        actionArray,
-        startData,
-    }
-}
 
 /**
  * @param {NS} ns
@@ -196,60 +138,19 @@ function processJobs(ns, runners, targets, lfn) {
         if (!ignoreServers.includes(target.server)) {
             //continue
         }
-        const {server} = target.targetState
-        const step = 1
-
-        const hackMoney = 0.5 * target.maxMoney
-        const hackThreads = Math.floor(ns.hackAnalyzeThreads(server, hackMoney))
-        const hackTime = Math.ceil(ns.getHackTime(server))
-
-        const hackSecurity = ns.hackAnalyzeSecurity(hackThreads, server)
-        let hackWeakenThreads = 0
-        while (ns.weakenAnalyze(hackWeakenThreads) < hackSecurity) {
-            hackWeakenThreads++
-        }
-        const weakenTime = Math.ceil(ns.getWeakenTime(server))
-
-        const growThreads = Math.ceil(ns.growthAnalyze(server, 2))
-        const growSecurity = 2 * 0.002 * growThreads // ns.growthAnalyzeSecurity(growThreads, target.server, 1)
-        let weakenGrowThreads = 0
-        while (ns.weakenAnalyze(weakenGrowThreads) < growSecurity) {
-            weakenGrowThreads++
-        }
-        const growTime = Math.ceil(ns.getGrowTime(server))
-
-        const times = computeBatch(hackTime, weakenTime, growTime)
-        const hackDelay = times[0][0]
-        const weakenHackDelay = times[1][0]
-        const growDelay = times[2][0]
-        const weakenGrowDelay = times[3][0]
-
-        const getIndex = (time) => {
-            return Math.floor((time) / IterationOffset)
-        }
-        const totalLength = getIndex(weakenGrowDelay + weakenTime) + 1
-
-        const hackB = getIndex(hackDelay)
-        const hackE = getIndex(hackDelay + hackTime)
-        const weakenHackB = getIndex(weakenHackDelay)
-        const weakenHackE = getIndex(weakenHackDelay + weakenTime)
-        const growB = getIndex(growDelay)
-        const growE = getIndex(growDelay + growTime)
-        const weakenGrowB = getIndex(weakenGrowDelay)
-        const weakenGrowE = getIndex(weakenGrowDelay + weakenTime)
 
         let {
+            hackTime,
+            weakenTime,
+            growTime,
+            hackDelay,
+            weakenHackDelay,
+            growDelay,
+            weakenGrowDelay,
             actionArray,
             startData,
-        } = computeArrayForBatch(totalLength, 1, hackB, hackE, weakenHackB, weakenHackE, growB, growE, weakenGrowB, weakenGrowE)
+        } = computeBatchParams(target, ns)
 
-        for (let i = 2; i < 20; i++) {
-            const solution = computeArrayForBatch(totalLength, i, hackB, hackE, weakenHackB, weakenHackE, growB, growE, weakenGrowB, weakenGrowE)
-            if (solution.startData.length > startData.length) {
-                actionArray = solution.actionArray
-                startData = solution.startData
-            }
-        }
         const size = 1000 / IterationOffset
         const lineSec = 10
         let sb = []
@@ -329,13 +230,7 @@ function processJobs(ns, runners, targets, lfn) {
     lfn(`done ${Date.now() - start} ms`)
 }
 
-const Colors = {
-    Start: ColorEnum.White,
-    Hack: ColorEnum.Red,
-    WeakenHack: ColorEnum.Cyan,
-    Grow: ColorEnum.Yellow,
-    WeakenGrow: ColorEnum.Green,
-}
+
 
 /**
  * @param {TargetJobData} source
@@ -345,40 +240,6 @@ function updateDelay(source, slotId) {
     source.delay = getNextSleepForSlot(slotId, source.delay + source.duration) - source.duration
 }
 
-/**
- *
- * @param {number} hackDuration
- * @param {number} weakenDuration
- * @param {number} growDuration
- * @returns {number[][]}
- */
-function computeBatch(hackDuration, weakenDuration, growDuration) {
-    const times = [
-        [
-            weakenDuration - 3 * IterationOffset - hackDuration,
-            weakenDuration - 3 * IterationOffset,
-        ],
-        [
-            weakenDuration - 2 * IterationOffset - weakenDuration,
-            weakenDuration - 2 * IterationOffset,
-        ],
-        [
-            weakenDuration - IterationOffset - growDuration,
-            weakenDuration - IterationOffset,
-        ],
-        [
-            0,
-            weakenDuration,
-        ],
-    ]
-
-    const offset = Math.min(times[0][0], times[1][0], times[2][0], times[3][0])
-    for (let i = 0; i < times.length; i++) {
-        times[i][0] -= offset
-        times[i][1] -= offset
-    }
-    return times
-}
 
 /**
  *

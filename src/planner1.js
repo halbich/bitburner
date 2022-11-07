@@ -2,7 +2,7 @@ import {printTable} from "src/utils/table.js"
 import {formatMoney, progressBar} from "src/utils/utils.js"
 import {loadRunners} from "src/models/runnerData.js"
 import {loadTargets} from "src/models/targetData.js"
-import {initServer, runJob, TargetsStates, TargetStatesEnum} from "src/models/targetState.js"
+import {initServer, recomputeServer, runJob, TargetsStates, TargetStatesEnum} from "src/models/targetState.js"
 import {ActionsEnum, Files, IterationLength, IterationOffset} from "src/utils/constants"
 import {getNextSleepForSlot1} from "src/utils/slots"
 
@@ -31,12 +31,12 @@ export async function main(ns) {
 
         lfn(`load ${Date.now() - start} ms`)
 
-        processJobs(ns, runners, targets, iteration, lfn)
-
         const display = targets.filter((item) => {
                 return forceServers.includes(item.server)
             },
         )
+
+        processJobs(ns, runners, display, iteration, lfn)
 
         lfn(`process ${Date.now() - start} ms`)
         //printTable(lfn, runners, getRunnerStringData)
@@ -166,8 +166,11 @@ function processJobs(ns, runners, targets, iteration, lfn) {
 
         switch (state.state) {
             case TargetStatesEnum.Batching: {
-                if (item.minSecurity === item.currentSecurity && item.currentMoney === item.maxMoney && state.runningJobs < 1024) {
-                    batchingTargets.push(item)
+                if (item.minSecurity === item.currentSecurity && item.currentMoney === item.maxMoney) {
+                    ns.tprint(item.canStartBatch());
+                    if (item.canStartBatch()) {
+                        batchingTargets.push(item)
+                    }
                 } else if (!state.runningJobs) {
                     initTargets.push(item)
                 }
@@ -195,7 +198,7 @@ function processJobs(ns, runners, targets, iteration, lfn) {
                 allowSplit: true,
                 threads: threadsToWeakenGrow,
                 target: target.server,
-                action: ActionsEnum.Weaken,
+                action: ActionsEnum.WeakenGrow,
                 amount: ns.weakenAnalyze(threadsToWeakenGrow),
                 duration: Math.ceil(ns.getWeakenTime(target.server)),
             }, iteration, lfn)
@@ -211,17 +214,8 @@ function processJobs(ns, runners, targets, iteration, lfn) {
                 duration: Math.ceil(ns.getGrowTime(target.server)),
             }, iteration, lfn)
         } else {
-            if (target.targetState.state !== TargetStatesEnum.Batching) {
-                let threadsToHack = Math.floor(ns.hackAnalyzeThreads(target.server, target.maxMoney * 0.5))
-                fillRunners(available, ns, {
-                    allowSplit: true,
-                    threads: threadsToHack,
-                    target: target.server,
-                    action: ActionsEnum.Hack,
-                    amount: target.maxMoney * 0.5,
-                    duration: Math.ceil(ns.getHackTime(target.server)),
-                }, iteration, lfn)
-            }
+            lfn("recompute " + target.server)
+            recomputeServer(ns, target.server)
         }
     }
 
@@ -242,22 +236,11 @@ function processJobs(ns, runners, targets, iteration, lfn) {
 
     while (batchingTargets.length && remainingAvailable > 0) {
         const target = batchingTargets.shift()
-        if (!forceServers.includes(target.server)) {
-            continue
-        }
-        continue
         const state = target.targetState
         if (state.totalThreads > remainingAvailable) {
             continue
         }
         remainingAvailable -= state.totalThreads
-
-        // ns.tprint(`${id}: ${target.currentMoney}/${target.maxMoney}, ${target.currentSecurity}/${target.minSecurity}`)
-
-        updateDelay(state.hack, 1)
-        updateDelay(state.weakenHack, 2)
-        updateDelay(state.grow, 3)
-        updateDelay(state.weakenGrow, 4)
 
         fillRunners(available, ns, {
             allowSplit: false,
@@ -268,7 +251,7 @@ function processJobs(ns, runners, targets, iteration, lfn) {
         fillRunners(available, ns, {
             allowSplit: false,
             target: target.server,
-            action: ActionsEnum.Weaken,
+            action: ActionsEnum.WeakenHack,
             ...state.weakenHack,
         }, iteration, lfn)
         fillRunners(available, ns, {
@@ -280,7 +263,7 @@ function processJobs(ns, runners, targets, iteration, lfn) {
         fillRunners(available, ns, {
             allowSplit: false,
             target: target.server,
-            action: ActionsEnum.Weaken,
+            action: ActionsEnum.WeakenGrow,
             ...state.weakenGrow,
         }, iteration, lfn)
     }
@@ -432,7 +415,6 @@ function getUpdateProgressBar(max, current, size) {
 
     }
 }
-
 
 const forceServers = [
     "n00dles",

@@ -21,7 +21,7 @@ export async function main(ns) {
             if (msg.startsWith("{")) {
                 states.processJobMessage(JSON.parse(msg), ns)
             } else {
-                states.processStateMessage(msg, ns.tprint)
+                states.processStateMessage(msg, ns, ns.tprint)
             }
         }
 

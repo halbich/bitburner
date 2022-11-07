@@ -2,7 +2,7 @@ import {ActionsEnum, PortAllocations, IterationLength} from "src/utils/constants
 
 /** @param {NS} ns */
 export async function main(ns) {
-    const dur = Date.now()
+    const scriptStart = Date.now()
     const flags = ns.flags([
         [
             "threads",
@@ -40,7 +40,7 @@ export async function main(ns) {
     }
 
     if (flags.delay > 0) {
-        await ns.sleep(flags.delay + dur % IterationLength)
+        await ns.sleep(flags.delay)
     }
     const {
         action,
@@ -49,25 +49,26 @@ export async function main(ns) {
         amount,
         duration,
     } = flags
-    const dur0 = Date.now()
+    const actionBegin = Date.now()
     ns.print(`${new Date().toLocaleTimeString()}. Doing ${action} on ${target}`)
     switch (action) {
-        case ActionsEnum.Weaken: {
+        case ActionsEnum.WeakenHack:
+        case ActionsEnum.WeakenGrow: {
             const value = await ns.weaken(target, {threads})
-            //ns.tprint("Weaken " + flags.id + " " + Date.now() % IterationLength)
-            await writeAction(ns, target, action, threads, flags.delay, amount, value, duration, dur, dur0)
+            const actionEnd = Date.now()
+            await writeAction(ns, target, action, threads, flags.delay, amount, value, duration, scriptStart, actionBegin, actionEnd)
             break
         }
         case ActionsEnum.Grow: {
             const value = await ns.grow(target, {threads})
-            //ns.tprint("Grow " + flags.id + " " + Date.now() % IterationLength)
-            await writeAction(ns, target, action, threads, flags.delay, amount, value, duration, dur, dur0)
+            const actionEnd = Date.now()
+            await writeAction(ns, target, action, threads, flags.delay, amount, value, duration, scriptStart, actionBegin, actionEnd)
             break
         }
         case ActionsEnum.Hack: {
             const value = await ns.hack(target, {threads})
-            //ns.tprint("Hack " + flags.id + " " + Date.now() % IterationLength)
-            await writeAction(ns, target, action, threads, flags.delay, amount, value, duration, dur, dur0)
+            const actionEnd = Date.now()
+            await writeAction(ns, target, action, threads, flags.delay, amount, value, duration, scriptStart, actionBegin, actionEnd)
             break
         }
         default: {
@@ -86,11 +87,12 @@ export async function main(ns) {
  * @param {number} expectedAmount
  * @param {number} amount
  * @param {number} expectedDuration
- * @param {number} jobStartTimestamp
+ * @param {number} scriptStartTimestamp
  * @param {number} actionStartTimestamp
+ * @param {number} actionEndTimestamp
  * @returns {Promise<any>}
  */
-async function writeAction(ns, server, action, threads, delay, expectedAmount, amount, expectedDuration, jobStartTimestamp, actionStartTimestamp) {
+async function writeAction(ns, server, action, threads, delay, expectedAmount, amount, expectedDuration, scriptStartTimestamp, actionStartTimestamp, actionEndTimestamp) {
     return ns.writePort(PortAllocations.TargetState, JSON.stringify({
         server,
         action,
@@ -99,7 +101,8 @@ async function writeAction(ns, server, action, threads, delay, expectedAmount, a
         expectedAmount,
         amount,
         expectedDuration,
-        duration: Date.now() - actionStartTimestamp,
-        totalDuration: Date.now() - jobStartTimestamp,
+        scriptStartTimestamp,
+        actionStartTimestamp,
+        actionEndTimestamp,
     }))
 }

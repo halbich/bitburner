@@ -3,9 +3,10 @@ export const PortAllocations = {
 }
 
 export const ActionsEnum = {
-    Weaken: "weaken",
-    Grow: "grow",
     Hack: "hack",
+    WeakenHack: "weakenHack",
+    Grow: "grow",
+    WeakenGrow: "weakenGrow",
 }
 
 export const Files = {

@@ -35,11 +35,17 @@ export async function main(ns) {
 
         lfn(`load ${Date.now() - start} ms`)
 
-        processJobs(ns, runners, targets, lfn)
+        const display = targets.filter((item) => {
+                return !ignoreServers.includes(item.server)
+            },
+        )
+
+
+        processJobs(ns, runners, display, lfn)
 
         lfn(`process ${Date.now() - start} ms`)
         //printTable(lfn, runners, getRunnerStringData)
-        printTable(lfn, targets, getTargetStringData)
+        printTable(lfn, display, getTargetStringData)
 
         const length = Date.now() - start
         lfn(`Iteration done in ${length} ms`)
@@ -192,7 +198,7 @@ function processJobs(ns, runners, targets, lfn) {
                 allowSplit: true,
                 threads: threadsToWeakenGrow,
                 target: target.server,
-                action: ActionsEnum.Weaken,
+                action: ActionsEnum.WeakenGrow,
                 amount: ns.weakenAnalyze(threadsToWeakenGrow),
                 duration: Math.ceil(ns.getWeakenTime(target.server)),
             }, lfn)
@@ -239,9 +245,7 @@ function processJobs(ns, runners, targets, lfn) {
 
     while (batchingTargets.length && remainingAvailable > 0) {
         const target = batchingTargets.shift()
-        if (ignoreServers.includes(target.server)) {
-            continue
-        }
+
         const state = target.targetState
         if (state.totalThreads > remainingAvailable) {
             continue
@@ -264,7 +268,7 @@ function processJobs(ns, runners, targets, lfn) {
         fillRunners(available, ns, {
             allowSplit: false,
             target: target.server,
-            action: ActionsEnum.Weaken,
+            action: ActionsEnum.WeakenHack,
             ...state.weakenHack,
         }, lfn)
         fillRunners(available, ns, {
@@ -276,7 +280,7 @@ function processJobs(ns, runners, targets, lfn) {
         fillRunners(available, ns, {
             allowSplit: false,
             target: target.server,
-            action: ActionsEnum.Weaken,
+            action: ActionsEnum.WeakenGrown,
             ...state.weakenGrow,
         }, lfn)
     }

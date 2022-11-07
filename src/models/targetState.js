@@ -1,5 +1,23 @@
-import {ActionsEnum, Files, PortAllocations, IterationLength, SlotSize} from "src/utils/constants"
-import {getNextSleepForSlot} from "src/utils/slots"
+import {ActionsEnum, Files, PortAllocations, IterationOffset} from "src/utils/constants"
+import {colorCode, ColorEnum, Colors} from "src/utils/utils"
+
+export class TargetJobAction {
+    /**
+     *
+     * @param {string} action
+     * @param {boolean} isBegin
+     * @param {boolean} isStart
+     */
+    constructor({
+                    action,
+                    isBegin,
+                    isStart,
+                }) {
+        this.action = action
+        this.isBegin = isBegin
+        this.isStart = isStart
+    }
+}
 
 export class TargetJobData {
     /**
@@ -33,8 +51,8 @@ export class TargetState {
      * @param {TargetJobData} grow
      * @param {TargetJobData} weakenGrow
      * @param {number} totalThreads
-     * @param {number} batchLength
      * @param {number} expectedRevenue
+     * @param {TargetJobAction[]} batchData
      */
     constructor({
                     server,
@@ -45,8 +63,8 @@ export class TargetState {
                     grow,
                     weakenGrow,
                     totalThreads,
-                    batchLength,
                     expectedRevenue,
+                    batchData,
                 }) {
         this.server = server
         this.state = state
@@ -59,6 +77,16 @@ export class TargetState {
 
         this.totalThreads = totalThreads
         this.expectedRevenue = expectedRevenue
+        this.batchData = batchData
+    }
+
+    canStartBatch() {
+        if (!this.batchData?.length) {
+            return false
+        }
+        const now = Math.floor(Date.now() / IterationOffset)
+        const currentIndex = now % this.batchData.length
+        return this.batchData[currentIndex]?.isStart ?? false
     }
 }
 
@@ -113,9 +141,10 @@ export class TargetsStates {
     /**
      *
      * @param {string} message
+     * @param {NS} ns
      * @param {(...args: any[]) => void} lfn
      */
-    processStateMessage(message, lfn) {
+    processStateMessage(message, ns, lfn) {
         if (message.startsWith(MessagesEnum.Init)) {
             const name = message.substring(MessagesEnum.Init.length)
             const newState = new TargetState({
@@ -123,6 +152,14 @@ export class TargetsStates {
                 state: TargetStatesEnum.Init,
             })
             this.states.set(newState.server, newState)
+        } else if (message.startsWith(MessagesEnum.Recompute)) {
+            const name = message.substring(MessagesEnum.Recompute.length)
+            const state = this.states.get(name)
+            if (!state) {
+                return
+            }
+
+            this.#computeBatchParams(state, ns)
         } else if (message.startsWith(MessagesEnum.Running)) {
             const data = message.substring(MessagesEnum.Running.length).split(";")
             const state = this.states.get(data[0])
@@ -174,49 +211,7 @@ export class TargetsStates {
         state.runningJobs--
 
         switch (state.state) {
-            case TargetStatesEnum.Preparing: {
-                switch (data.action) {
-                    case ActionsEnum.Hack: {
-                        state.hack = new TargetJobData({
-                            threads: data.threads,
-                            amount: data.expectedAmount,
-                            duration: data.expectedDuration,
-                            delay: data.delay,
-                        })
-                        break
-                    }
-                    case ActionsEnum.Grow: {
-                        state.grow = new TargetJobData({
-                            threads: data.threads,
-                            amount: data.expectedAmount,
-                            duration: data.expectedDuration,
-                            delay: data.delay,
-                        })
-                        break
-                    }
-                    case ActionsEnum.Weaken: {
-                        if (state.grow) {
-                            state.weakenGrow = new TargetJobData({
-                                threads: data.threads,
-                                amount: data.expectedAmount,
-                                duration: data.expectedDuration,
-                                delay: data.delay,
-                            })
-                            this.#finalizeBatching(state, ns)
-                        } else {
-                            state.weakenHack = new TargetJobData({
-                                threads: data.threads,
-                                amount: data.expectedAmount,
-                                duration: data.expectedDuration,
-                                delay: data.delay,
-                            })
-                        }
-                        break
-                    }
 
-                }
-                break
-            }
         }
     }
 
@@ -234,49 +229,223 @@ export class TargetsStates {
     }
 
     /**
+     * @param {*} totalLength
+     * @param {number} step
+     * @param {number} hackB
+     * @param {number} hackE
+     * @param {number} weakenHackB
+     * @param {number} weakenHackE
+     * @param {number} growB
+     * @param {number} growE
+     * @param {number} weakenGrowB
+     * @param {number} weakenGrowE
+     * @return {{actionArray: TargetJobAction[]; startData: number[] }}
      *
+     */
+    #computeArrayForBatch(totalLength, step, hackB, hackE, weakenHackB, weakenHackE, growB, growE, weakenGrowB, weakenGrowE) {
+        const actionArray = new Array(totalLength)
+        const startData = []
+        for (let start = 0; start < totalLength; start += step) {
+
+            const _hackB = (hackB + start + totalLength) % totalLength
+            const _hackE = (hackE + start + totalLength) % totalLength
+            const _weakenHackB = (weakenHackB + start + totalLength) % totalLength
+            const _weakenHackE = (weakenHackE + start + totalLength) % totalLength
+            const _growB = (growB + start + totalLength) % totalLength
+            const _growE = (growE + start + totalLength) % totalLength
+            const _weakenGrowB = (weakenGrowB + start + totalLength) % totalLength
+            const _weakenGrowE = (weakenGrowE + start + totalLength) % totalLength
+
+            if (!actionArray[start] &&
+                !actionArray[_hackB] && !actionArray[_hackE] &&
+                !actionArray[_weakenHackB] && !actionArray[_weakenHackE] &&
+                !actionArray[_growB] && !actionArray[_growE] &&
+                !actionArray[_weakenGrowB] && !actionArray[_weakenGrowE]) {
+
+                startData.push(start)
+
+                actionArray[start] = new TargetJobAction({
+                    action: "start",
+                    isBegin: true,
+                    isStart: true,
+                })
+
+                actionArray[_hackB] = new TargetJobAction({
+                    action: ActionsEnum.Hack,
+                    isBegin: true,
+                    isStart: _hackB === start,
+                })
+                actionArray[_hackE] = new TargetJobAction({
+                    action: ActionsEnum.Hack,
+                    isBegin: false,
+                    isStart: _hackE === start,
+                })
+
+                actionArray[_weakenHackB] = new TargetJobAction({
+                    action: ActionsEnum.WeakenHack,
+                    isBegin: true,
+                    isStart: _weakenHackB === start,
+                })
+                actionArray[_weakenHackE] = new TargetJobAction({
+                    action: ActionsEnum.WeakenHack,
+                    isBegin: false,
+                    isStart: _weakenHackE === start,
+                })
+
+                actionArray[_growB] = new TargetJobAction({
+                    action: ActionsEnum.Grow,
+                    isBegin: true,
+                    isStart: _growB === start,
+                })
+                actionArray[_growE] = new TargetJobAction({
+                    action: ActionsEnum.Grow,
+                    isBegin: false,
+                    isStart: _growE === start,
+                })
+
+                actionArray[_weakenGrowB] = new TargetJobAction({
+                    action: ActionsEnum.WeakenGrow,
+                    isBegin: true,
+                    isStart: _weakenGrowB === start,
+                })
+                actionArray[_weakenGrowE] = new TargetJobAction({
+                    action: ActionsEnum.WeakenGrow,
+                    isBegin: false,
+                    isStart: _weakenGrowE === start,
+                })
+
+                for (let i = _hackE; i < _weakenGrowE; i++) {
+                    if (!actionArray[i]) {
+                        actionArray [i] = new TargetJobAction({
+                            action: "none",
+                            isBegin: false,
+                            isStart: false,
+                        })
+                    }
+                }
+            }
+
+        }
+
+        return {
+            actionArray,
+            startData,
+        }
+    }
+
+    /**
      * @param {TargetState} state
      * @param {NS} ns
      */
-    #finalizeBatching(state, ns) {
-        state.hack.duration = Math.ceil(ns.getHackTime(state.server))
-        state.weakenHack.duration = Math.ceil(ns.getWeakenTime(state.server))
-        state.grow.duration = Math.ceil(ns.getGrowTime(state.server))
-        state.weakenGrow.duration = Math.ceil(ns.getWeakenTime(state.server))
+    #computeBatchParams(state, ns) {
+        const {server} = state
+        const hackMoney = 0.5 * ns.getServerMaxMoney(server)
+        const hackThreads = Math.floor(ns.hackAnalyzeThreads(server, hackMoney))
+        const hackTime = Math.ceil(ns.getHackTime(server))
 
-        const times = this.#computeBatch(state)
-        state.hack.delay = times[0][0]
-        state.weakenHack.delay = times[1][0]
-        state.grow.delay = times[2][0]
-        state.weakenGrow.delay = times[3][0]
+        const hackSecurity = ns.hackAnalyzeSecurity(hackThreads, server)
+        let hackWeakenThreads = 0
+        while (ns.weakenAnalyze(hackWeakenThreads) < hackSecurity) {
+            hackWeakenThreads++
+        }
+        const weakenTime = Math.ceil(ns.getWeakenTime(server))
 
-        const pipelineLength = Math.max(state.hack.duration, state.weakenHack.duration, state.grow.duration, state.weakenGrow.duration) - Math.min(state.hack.duration, state.weakenHack.duration, state.grow.duration, state.weakenGrow.duration)
-        state.expectedRevenue = state.hack.amount / pipelineLength
-        state.state = TargetStatesEnum.Batching
+        const growThreads = Math.ceil(ns.growthAnalyze(server, 2))
+        const growSecurity = 2 * 0.002 * growThreads // ns.growthAnalyzeSecurity(growThreads, target.server, 1)
+        let weakenGrowThreads = 0
+        while (ns.weakenAnalyze(weakenGrowThreads) < growSecurity) {
+            weakenGrowThreads++
+        }
+        const growTime = Math.ceil(ns.getGrowTime(server))
+
+        const times = this.#computeBatch(hackTime, weakenTime, growTime)
+        const hackDelay = times[0][0]
+        const weakenHackDelay = times[1][0]
+        const growDelay = times[2][0]
+        const weakenGrowDelay = times[3][0]
+
+        const getIndex = (time) => {
+            return Math.floor((time) / IterationOffset)
+        }
+        const totalLength = getIndex(weakenGrowDelay + weakenTime) + 1
+
+        const hackB = getIndex(hackDelay)
+        const hackE = getIndex(hackDelay + hackTime)
+        const weakenHackB = getIndex(weakenHackDelay)
+        const weakenHackE = getIndex(weakenHackDelay + weakenTime)
+        const growB = getIndex(growDelay)
+        const growE = getIndex(growDelay + growTime)
+        const weakenGrowB = getIndex(weakenGrowDelay)
+        const weakenGrowE = getIndex(weakenGrowDelay + weakenTime)
+
+        let {
+            actionArray,
+            startData,
+        } = this.#computeArrayForBatch(totalLength, 1, hackB, hackE, weakenHackB, weakenHackE, growB, growE, weakenGrowB, weakenGrowE)
+
+        for (let i = 2; i < 20; i++) {
+            const solution = this.#computeArrayForBatch(totalLength, i, hackB, hackE, weakenHackB, weakenHackE, growB, growE, weakenGrowB, weakenGrowE)
+            if (solution.startData.length > startData.length) {
+                actionArray = solution.actionArray
+                startData = solution.startData
+            }
+        }
+
+        state.hack = new TargetJobData({
+            amount: hackMoney,
+            threads: hackThreads,
+            duration: hackTime,
+            delay: hackDelay,
+        })
+        state.weakenHack = new TargetJobData({
+            amount: hackSecurity,
+            threads: hackWeakenThreads,
+            duration: weakenTime,
+            delay: weakenHackDelay,
+        })
+        state.grow = new TargetJobData({
+            amount: 2,
+            threads: growThreads,
+            duration: growTime,
+            delay: growDelay,
+        })
+        state.weakenGrow = new TargetJobData({
+            amount: growSecurity,
+            threads: weakenGrowThreads,
+            duration: weakenTime,
+            delay: weakenGrowDelay,
+        })
+
         state.totalThreads = state.hack.threads + state.weakenHack.threads + state.grow.threads + state.weakenGrow.threads
+        state.expectedRevenue = startData.length * state.hack.amount / (state.weakenGrow.delay + state.weakenGrow.duration)
+        state.batchData = actionArray
+        state.state = TargetStatesEnum.Batching
     }
 
     /**
      *
-     * @param {TargetState} state
+     * @param {number} hackDuration
+     * @param {number} weakenDuration
+     * @param {number} growDuration
+     * @returns {number[][]}
      */
-    #computeBatch(state) {
+    #computeBatch(hackDuration, weakenDuration, growDuration) {
         const times = [
             [
-                state.weakenGrow.duration - 3 * SlotSize - state.hack.duration,
-                state.weakenGrow.duration - 3 * SlotSize,
+                weakenDuration - 3 * IterationOffset - hackDuration,
+                weakenDuration - 3 * IterationOffset,
             ],
             [
-                state.weakenGrow.duration - 2 * SlotSize - state.weakenHack.duration,
-                state.weakenGrow.duration - 2 * SlotSize,
+                weakenDuration - 2 * IterationOffset - weakenDuration,
+                weakenDuration - 2 * IterationOffset,
             ],
             [
-                state.weakenGrow.duration - SlotSize - state.grow.duration,
-                state.weakenGrow.duration - SlotSize,
+                weakenDuration - IterationOffset - growDuration,
+                weakenDuration - IterationOffset,
             ],
             [
                 0,
-                state.weakenGrow.duration,
+                weakenDuration,
             ],
         ]
 
@@ -287,10 +456,12 @@ export class TargetsStates {
         }
         return times
     }
+
 }
 
 const MessagesEnum = {
     Init: "init:",
+    Recompute: "recompute:",
     Running: "running:",
 }
 
@@ -307,6 +478,14 @@ export const TargetStatesEnum = {
  */
 export function initServer(ns, server) {
     ns.writePort(PortAllocations.TargetState, MessagesEnum.Init + server).then()
+}
+
+/**
+ * @param {NS} ns
+ * @param {string} server
+ */
+export function recomputeServer(ns, server) {
+    ns.writePort(PortAllocations.TargetState, MessagesEnum.Recompute + server).then()
 }
 
 /**

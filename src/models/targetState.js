@@ -1,5 +1,4 @@
-import {ActionsEnum, Files, PortAllocations, IterationOffset} from "src/utils/constants"
-import {colorCode, ColorEnum, Colors} from "src/utils/utils"
+import {ActionsEnum, Files, PortAllocations, IterationOffset, StealPercent} from "src/utils/constants"
 
 export class TargetJobAction {
     /**
@@ -339,7 +338,7 @@ export class TargetsStates {
      */
     #computeBatchParams(state, ns) {
         const {server} = state
-        const hackMoney = 0.5 * ns.getServerMaxMoney(server)
+        const hackMoney = StealPercent * ns.getServerMaxMoney(server)
         const hackThreads = Math.floor(ns.hackAnalyzeThreads(server, hackMoney))
         const hackTime = Math.ceil(ns.getHackTime(server))
 
